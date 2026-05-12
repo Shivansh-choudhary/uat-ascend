@@ -16,7 +16,6 @@
   },
   "dependencies": {
     "@azure/msal-browser": "^5.10.0",
-    "@clerk/react": "^6.6.2",
     "@radix-ui/react-scroll-area": "^1.2.9",
     "@tailwindcss/vite": "^4.1.18",
     "@tanstack/react-devtools": "latest",

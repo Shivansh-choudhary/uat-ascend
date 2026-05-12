@@ -1,6 +1,3 @@
-// Old MSAL config implementation is intentionally kept as commented reference.
-// Do not remove unless explicitly requested.
-/*
 import {
   type AccountInfo,
   PublicClientApplication,
@@ -70,6 +67,3 @@ export function toUserData(account: AccountInfo) {
     Designation: rest.length > 0 ? rest.join(' ') : first || 'Employee',
   }
 }
-*/
-
-export {}

@@ -1,18 +1,21 @@
-import { Show, UserButton } from '@clerk/react'
+import { Button } from '#/components/ui/button'
+import { logoutMicrosoft } from '#/lib/msal-auth'
+import { useAssessmentStore } from '#/store/assessment-store'
 import ThemeToggle from './ThemeToggle'
 
 export default function Header() {
-  // Old MSAL sign-out implementation kept for reference; do not remove.
-  // const { isLoggedIn, signOut } = useAssessmentStore()
-  // const handleSignOut = async () => {
-  //   try {
-  //     await logoutMicrosoft()
-  //   } catch (error) {
-  //     console.error('[Auth] Microsoft logout failed:', error)
-  //   } finally {
-  //     signOut()
-  //   }
-  // }
+  const { isLoggedIn, signOut, resetAssessment } = useAssessmentStore()
+
+  const handleSignOut = async () => {
+    try {
+      await logoutMicrosoft()
+    } catch (error) {
+      console.error('[Auth] Microsoft logout failed:', error)
+    } finally {
+      resetAssessment()
+      signOut()
+    }
+  }
 
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background px-4">
@@ -23,9 +26,11 @@ export default function Header() {
         </a>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Show when="signed-in">
-            <UserButton />
-          </Show>
+          {isLoggedIn ? (
+            <Button variant="outline" size="sm" onClick={() => void handleSignOut()}>
+              Sign out
+            </Button>
+          ) : null}
         </div>
       </nav>
     </header>

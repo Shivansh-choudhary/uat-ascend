@@ -1,5 +1,4 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { Show, SignInButton, SignOutButton, useUser } from '@clerk/react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   answerOptions,
@@ -11,6 +10,13 @@ import {
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
 import { useAssessmentStore } from '#/store/assessment-store'
+import {
+  getActiveMicrosoftAccount,
+  isMsalConfigured,
+  loginWithMicrosoft,
+  logoutMicrosoft,
+  toUserData,
+} from '#/lib/msal-auth'
 import { Progress } from '#/components/ui/progress'
 import { cn } from '#/lib/utils'
 import { Separator } from '#/components/ui/separator'
@@ -90,13 +96,16 @@ const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:3001'
 
 function App() {
-  const { user } = useUser()
   const {
     currentQuestionId,
     answersArray,
     setAnswerForQuestion,
     nextQuestion,
     resetAssessment,
+    isLoggedIn,
+    userData,
+    signIn,
+    signOut,
   } = useAssessmentStore()
   const [remainingMinutes, setRemainingMinutes] = useState(7)
   const [timerRunId, setTimerRunId] = useState(0)
@@ -116,16 +125,6 @@ function App() {
   const currentPageStart = Math.floor((currentQuestionId - 1) / 5) * 5
   const visibleQuestions = questions.slice(currentPageStart, currentPageStart + 5)
   const isTimeUp = remainingMinutes <= 0
-  const userData = useMemo(
-    () => ({
-      name: user?.fullName ?? user?.username ?? 'User',
-      email: user?.primaryEmailAddress?.emailAddress ?? '',
-      Department: '',
-      Designation: 'Employee',
-    }),
-    [user],
-  )
-
   const buildResultPayload = (): ResultData => {
     const answersMap = answersArray.reduce<Record<number, number>>(
       (acc, value, index) => {
@@ -186,23 +185,53 @@ function App() {
     }
   }
 
-  // Old MSAL login implementation kept for reference; do not remove.
-  // const handleLogin = async () => {
-  //   try {
-  //     if (!isMsalConfigured()) {
-  //       return
-  //     }
-  //     const account = await loginWithMicrosoft()
-  //     const fetchedUserData = toUserData(account)
-  //     signIn(fetchedUserData)
-  //   } catch (error) {
-  //     console.error('[Auth] Microsoft SSO login failed:', error)
-  //   }
-  // }
+  const handleLogin = async () => {
+    try {
+      if (!isMsalConfigured()) {
+        console.error(
+          '[Auth] Missing Microsoft SSO config. Set VITE_MSAL_CLIENT_ID and VITE_MSAL_TENANT_ID.',
+        )
+        return
+      }
+      const account = await loginWithMicrosoft()
+      signIn(toUserData(account))
+      resetAssessment()
+      setRemainingMinutes(7)
+      setTimerRunId((v) => v + 1)
+      setSubmitPhase('idle')
+      autoSubmitStartedRef.current = false
+    } catch (error) {
+      console.error('[Auth] Microsoft SSO login failed:', error)
+    }
+  }
+
+  const handleSignOut = async () => {
+    try {
+      await logoutMicrosoft()
+    } catch (error) {
+      console.error('[Auth] Microsoft logout failed:', error)
+    } finally {
+      resetAssessment()
+      signOut()
+      setSubmitPhase('idle')
+      autoSubmitStartedRef.current = false
+    }
+  }
+
+  useEffect(() => {
+    if (isLoggedIn || !isMsalConfigured()) {
+      return
+    }
+    const account = getActiveMicrosoftAccount()
+    if (!account) {
+      return
+    }
+    signIn(toUserData(account))
+  }, [isLoggedIn, signIn])
 
   useEffect(() => {
     console.log('[Auth/Survey State]', {
-      isSignedIn: Boolean(user),
+      isLoggedIn,
       answeredCount,
       currentQuestionId,
       isCompleted,
@@ -210,7 +239,7 @@ function App() {
       visibleQuestionIds: visibleQuestions.map((q) => q.id),
     })
   }, [
-    user,
+    isLoggedIn,
     answeredCount,
     currentQuestionId,
     isCompleted,
@@ -231,20 +260,7 @@ function App() {
   }, [timerRunId])
 
   useEffect(() => {
-    if (!user?.id) {
-      return
-    }
-    // DB is the source of truth. Always start a fresh in-memory assessment per sign-in.
-    resetAssessment()
-    setRemainingMinutes(7)
-    setTimerRunId((v) => v + 1)
-    setSubmitPhase('idle')
-    autoSubmitStartedRef.current = false
-  }, [user?.id, resetAssessment])
-
-  useEffect(() => {
-    const email = user?.primaryEmailAddress?.emailAddress
-    if (!email) {
+    if (!isLoggedIn || !userData.email) {
       setHasCompletedAssessment(false)
       setSubmitPhase('idle')
       autoSubmitStartedRef.current = false
@@ -254,11 +270,11 @@ function App() {
     const checkCompletionStatus = async () => {
       setIsCheckingCompletion(true)
       const endpoint = `${API_BASE_URL}/api/surveys/responses/status?email=${encodeURIComponent(
-        email,
+        userData.email,
       )}`
       console.log('[Survey][Frontend] Checking completion status:', {
         endpoint,
-        email,
+        email: userData.email,
       })
 
       try {
@@ -297,7 +313,7 @@ function App() {
     }
 
     void checkCompletionStatus()
-  }, [user])
+  }, [isLoggedIn, userData.email])
 
   useEffect(() => {
     if (isCheckingCompletion || hasCompletedAssessment) {
@@ -346,7 +362,7 @@ function App() {
 
   return (
     <>
-      <Show when="signed-out">
+      {!isLoggedIn ? (
         <div className="flex justify-start gap-2 h-[calc(100vh-72px)] overflow-hidden">
           <div className="w-fit overflow-hidden">
             <img
@@ -361,16 +377,16 @@ function App() {
               <p className="text-muted-foreground mb-6">
                 Please sign in to start your self assessment.
               </p>
-              <SignInButton mode="modal">
-                <Button className="w-full">Sign in to get started</Button>
-              </SignInButton>
+              <Button className="w-full" onClick={() => void handleLogin()}>
+                Sign in to get started
+              </Button>
             </div>
           </div>
 
         </div>
-      </Show>
+      ) : null}
 
-      <Show when="signed-in">
+      {isLoggedIn ? (
         <main className="mx-auto w-full max-w-[1200px] p-4">
           {isCheckingCompletion ? (
             <section className="rounded-xl bg-card p-6">
@@ -386,11 +402,9 @@ function App() {
               <p className="mt-2 text-sm text-muted-foreground">
                 This account has already submitted a response.
               </p>
-              <SignOutButton>
-                <Button className="mt-4" variant="outline">
-                  Log out
-                </Button>
-              </SignOutButton>
+              <Button className="mt-4" variant="outline" onClick={() => void handleSignOut()}>
+                Log out
+              </Button>
             </section>
           ) : null}
 
@@ -407,11 +421,9 @@ function App() {
               <p className="mt-3 text-sm text-muted-foreground">
                 Your responses have been saved. You can sign out when you are ready.
               </p>
-              <SignOutButton>
-                <Button className="mt-6" variant="default">
-                  Sign out
-                </Button>
-              </SignOutButton>
+              <Button className="mt-6" variant="default" onClick={() => void handleSignOut()}>
+                Sign out
+              </Button>
             </section>
           ) : null}
 
@@ -553,7 +565,7 @@ function App() {
             </>
           ) : null}
         </main>
-      </Show>
+      ) : null}
     </>
   )
 }
