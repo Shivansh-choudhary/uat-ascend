@@ -320,3 +320,19 @@ export const LetterGrades = [
     max: 3.5,
   },
 ]
+
+/**
+ * Maps overall weighted average (typically 1–5) to a letter grade.
+ * Uses tier thresholds so every value maps to a grade (no gaps — the old
+ * min/max array lookup missed values like 3.55 or 4.15).
+ */
+export function getLetterGradeFromAverage(overallWeightedAverage: number): string {
+  const score = Math.min(5, Math.max(0, overallWeightedAverage))
+  if (score >= 4.2) {
+    return 'A+'
+  }
+  if (score >= 3.6) {
+    return 'A'
+  }
+  return 'B'
+}

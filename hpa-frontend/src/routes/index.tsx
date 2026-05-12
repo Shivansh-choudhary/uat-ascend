@@ -1,25 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router'
 import { Show, SignInButton, SignOutButton, useUser } from '@clerk/react'
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   answerOptions,
   categories,
-  LetterGrades,
+  getLetterGradeFromAverage,
   questions,
   scoreLevels,
 } from '#/lib/assessment'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
 import { useAssessmentStore } from '#/store/assessment-store'
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from '#/components/ui/dialog'
-import { SurveyReportCard } from '#/components/survey-report'
 import { Progress } from '#/components/ui/progress'
 import { cn } from '#/lib/utils'
 import { Separator } from '#/components/ui/separator'
@@ -71,15 +62,12 @@ function calculateCategoryResults(
     },
   )
 
+  const weightSum = categories.reduce((sum, c) => sum + c.weight, 0)
   const overallWeightedAverage =
-    categoryScores.reduce((sum, item) => sum + item.weightedScore, 0) / 5
+    categoryScores.reduce((sum, item) => sum + item.weightedScore, 0) /
+    weightSum
 
-  const letterGrade =
-    LetterGrades.find(
-      (grade) =>
-        overallWeightedAverage >= grade.min &&
-        overallWeightedAverage <= grade.max,
-    )?.grade ?? ''
+  const letterGrade = getLetterGradeFromAverage(overallWeightedAverage)
 
   return {
     categories: categoryScores,
@@ -110,13 +98,15 @@ function App() {
     nextQuestion,
     resetAssessment,
   } = useAssessmentStore()
-  const [categoryResults, setCategoryResults] = useState<CategoryResult | null>(
-    null,
-  )
   const [remainingMinutes, setRemainingMinutes] = useState(7)
   const [timerRunId, setTimerRunId] = useState(0)
   const [isCheckingCompletion, setIsCheckingCompletion] = useState(false)
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState(false)
+  /** This session only — after a successful POST from completing all questions */
+  const [submitPhase, setSubmitPhase] = useState<
+    'idle' | 'submitting' | 'thanks' | 'error'
+  >('idle')
+  const autoSubmitStartedRef = useRef(false)
   const answeredCount = answersArray.reduce(
     (count, answer) => (answer === undefined ? count : count + 1),
     0,
@@ -136,7 +126,7 @@ function App() {
     [user],
   )
 
-  const showResults = async () => {
+  const buildResultPayload = (): ResultData => {
     const answersMap = answersArray.reduce<Record<number, number>>(
       (acc, value, index) => {
         if (value !== undefined) {
@@ -147,25 +137,13 @@ function App() {
       {},
     )
     const results = calculateCategoryResults(answersMap)
-    setCategoryResults(results)
-
-    // save the results to the database
-    const resultData = {
+    return {
       userData: userData,
       categoryResults: results,
       questionsAnswered: answersArray.flatMap((answer) =>
         answer === undefined ? [] : [answer],
       ),
     }
-    console.log('[Survey][Frontend] Prepared payload:', {
-      apiBaseUrl: API_BASE_URL,
-      userEmail: resultData.userData.email,
-      userName: resultData.userData.name,
-      answersCount: resultData.questionsAnswered.length,
-      categoryCount: resultData.categoryResults.categories.length,
-      letterGrade: resultData.categoryResults.letterGrade,
-    })
-    await saveResultsToDatabase(resultData)
   }
 
   const saveResultsToDatabase = async (resultData: ResultData) => {
@@ -196,6 +174,7 @@ function App() {
       }
 
       console.log('[Survey][Frontend] Survey response posted successfully.')
+      return true
     } catch (error) {
       const errorMessage =
         error instanceof Error ? error.message : 'Unknown error'
@@ -203,6 +182,7 @@ function App() {
         message: errorMessage,
         raw: error,
       })
+      return false
     }
   }
 
@@ -251,9 +231,23 @@ function App() {
   }, [timerRunId])
 
   useEffect(() => {
+    if (!user?.id) {
+      return
+    }
+    // DB is the source of truth. Always start a fresh in-memory assessment per sign-in.
+    resetAssessment()
+    setRemainingMinutes(7)
+    setTimerRunId((v) => v + 1)
+    setSubmitPhase('idle')
+    autoSubmitStartedRef.current = false
+  }, [user?.id, resetAssessment])
+
+  useEffect(() => {
     const email = user?.primaryEmailAddress?.emailAddress
     if (!email) {
       setHasCompletedAssessment(false)
+      setSubmitPhase('idle')
+      autoSubmitStartedRef.current = false
       return
     }
 
@@ -278,10 +272,15 @@ function App() {
 
         if (!response.ok) {
           setHasCompletedAssessment(false)
+          setSubmitPhase('idle')
           return
         }
 
         setHasCompletedAssessment(Boolean(body?.hasCompleted))
+        if (!body?.hasCompleted) {
+          setSubmitPhase('idle')
+          autoSubmitStartedRef.current = false
+        }
       } catch (error) {
         const errorMessage =
           error instanceof Error ? error.message : 'Unknown error'
@@ -290,6 +289,8 @@ function App() {
           raw: error,
         })
         setHasCompletedAssessment(false)
+        setSubmitPhase('idle')
+        autoSubmitStartedRef.current = false
       } finally {
         setIsCheckingCompletion(false)
       }
@@ -297,6 +298,39 @@ function App() {
 
     void checkCompletionStatus()
   }, [user])
+
+  useEffect(() => {
+    if (isCheckingCompletion || hasCompletedAssessment) {
+      return
+    }
+    if (!isCompleted) {
+      return
+    }
+    if (autoSubmitStartedRef.current) {
+      return
+    }
+    autoSubmitStartedRef.current = true
+    setSubmitPhase('submitting')
+
+    const run = async () => {
+      const resultData = buildResultPayload()
+      console.log('[Survey][Frontend] Auto-submit prepared payload:', {
+        apiBaseUrl: API_BASE_URL,
+        userEmail: resultData.userData.email,
+        answersCount: resultData.questionsAnswered.length,
+        letterGrade: resultData.categoryResults.letterGrade,
+      })
+      const ok = await saveResultsToDatabase(resultData)
+      if (ok) {
+        setSubmitPhase('thanks')
+      } else {
+        setSubmitPhase('error')
+        autoSubmitStartedRef.current = false
+      }
+    }
+
+    void run()
+  }, [isCheckingCompletion, hasCompletedAssessment, isCompleted])
 
   const canGoNext = useMemo(() => {
     if (isTimeUp) {
@@ -360,7 +394,30 @@ function App() {
             </section>
           ) : null}
 
-          {!isCheckingCompletion && !hasCompletedAssessment ? (
+          {!isCheckingCompletion &&
+          !hasCompletedAssessment &&
+          submitPhase === 'thanks' ? (
+            <section className="rounded-xl border border-default bg-card p-8 shadow-xs">
+              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                Thank you
+              </p>
+              <h2 className="text-2xl font-semibold">
+                Thanks for completing the survey
+              </h2>
+              <p className="mt-3 text-sm text-muted-foreground">
+                Your responses have been saved. You can sign out when you are ready.
+              </p>
+              <SignOutButton>
+                <Button className="mt-6" variant="default">
+                  Sign out
+                </Button>
+              </SignOutButton>
+            </section>
+          ) : null}
+
+          {!isCheckingCompletion &&
+          !hasCompletedAssessment &&
+          submitPhase !== 'thanks' ? (
             <>
           <div className="mb-4 flex items-start justify-between gap-3 p-2">
             <div>
@@ -391,25 +448,59 @@ function App() {
               <Button
                 size="sm"
                 variant="outline"
+                disabled={isCompleted || submitPhase === 'submitting'}
                 onClick={() => {
                   resetAssessment()
-                  setCategoryResults(null)
                   setRemainingMinutes(7)
                   setTimerRunId((v) => v + 1)
+                  setSubmitPhase('idle')
+                  autoSubmitStartedRef.current = false
                 }}
               >
                 Reset (Test)
               </Button>
             </div>
 
-            {!isCompleted ? (
+            {submitPhase === 'error' && isCompleted ? (
+              <div className="w-full rounded-md border border-destructive/50 bg-card p-6">
+                <p className="font-medium text-destructive">
+                  We could not save your responses.
+                </p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Check your connection and try again.
+                </p>
+                <Button
+                  className="mt-4"
+                  onClick={() => {
+                    setSubmitPhase('submitting')
+                    void (async () => {
+                      const ok = await saveResultsToDatabase(buildResultPayload())
+                      if (ok) {
+                        setSubmitPhase('thanks')
+                        autoSubmitStartedRef.current = true
+                      } else {
+                        setSubmitPhase('error')
+                      }
+                    })()
+                  }}
+                >
+                  Try again
+                </Button>
+              </div>
+            ) : isCompleted ? (
+              <div className="w-full rounded-md border border-default bg-card p-8 text-center">
+                <p className="text-base font-medium">Saving your responses…</p>
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Please wait a moment.
+                </p>
+              </div>
+            ) : (
               <div className="w-full border border-default rounded-md shadow-xs bg-card p-3">
 
                 <div className="mt-3 space-y-5">
                   {visibleQuestions.map((question) => {
                     const currentAnswer = answersArray[question.id - 1]
                     return (
-                      <>
                         <div key={question.id}>
                           <div className="flex justify-between items-center">
                             <div className="flex flex-col max-w-[500px]">
@@ -441,7 +532,6 @@ function App() {
 
                           <Separator />
                         </div>
-                      </>
                     )
                   })}
                 </div>
@@ -452,45 +542,13 @@ function App() {
                   </Button>
                 </div>
               </div>
-            ) : (
-              <div className="w-full rounded-md border border-default bg-card p-3 text-sm text-muted-foreground">
-                You already completed this survey. Click Submit to view report, or use
-                Reset (Test) to start again from Q1.
-              </div>
             )}
 
-            {isTimeUp ? (
+            {isTimeUp && !isCompleted ? (
               <p className="mt-4 text-sm font-semibold text-destructive">
-                Time is up. You can submit your answers now.
+                Time is up. Please answer all questions before your responses can be saved.
               </p>
             ) : null}
-
-            <Dialog>
-              <DialogTrigger>
-                <Button
-                  size="sm"
-                  className="my-2 px-4"
-                  onClick={() => showResults()}
-                  disabled={!isCompleted && !isTimeUp}
-                >
-                  Submit
-                </Button>
-              </DialogTrigger>
-              <DialogContent className="sm:max-w-4xl max-h-[85vh] overflow-y-auto">
-                <DialogHeader>
-                  <DialogTitle>Survey Report</DialogTitle>
-                  <DialogDescription>
-                    Review your calculated results below.
-                  </DialogDescription>
-                </DialogHeader>
-                <div className="max-w-full overflow-x-auto">
-                  <SurveyReportCard
-                    name={userData.name}
-                    categoryResults={categoryResults ?? { categories: [], letterGrade: '' }}
-                  />
-                </div>
-              </DialogContent>
-            </Dialog>
           </section>
             </>
           ) : null}
