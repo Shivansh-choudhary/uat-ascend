@@ -13,7 +13,6 @@ import { useAssessmentStore } from '#/store/assessment-store'
 import {
   getActiveMicrosoftAccount,
   isMsalConfigured,
-  loginWithMicrosoft,
   logoutMicrosoft,
   toUserData,
 } from '#/lib/msal-auth'
@@ -98,6 +97,17 @@ const DEFAULT_API_BASE_URL =
     : 'http://10.131.2.6:5001'
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL
+
+function buildDemoUserData() {
+  const sessionId = Date.now()
+
+  return {
+    name: 'Demo User',
+    email: `demo-${sessionId}@local.test`,
+    Department: 'Demo',
+    Designation: 'Presenter',
+  }
+}
 
 function App() {
   const {
@@ -190,23 +200,12 @@ function App() {
   }
 
   const handleLogin = async () => {
-    try {
-      if (!isMsalConfigured()) {
-        console.error(
-          '[Auth] Missing Microsoft SSO config. Set VITE_MSAL_CLIENT_ID and VITE_MSAL_TENANT_ID.',
-        )
-        return
-      }
-      const account = await loginWithMicrosoft()
-      signIn(toUserData(account))
-      resetAssessment()
-      setRemainingMinutes(7)
-      setTimerRunId((v) => v + 1)
-      setSubmitPhase('idle')
-      autoSubmitStartedRef.current = false
-    } catch (error) {
-      console.error('[Auth] Microsoft SSO login failed:', error)
-    }
+    signIn(buildDemoUserData())
+    resetAssessment()
+    setRemainingMinutes(7)
+    setTimerRunId((v) => v + 1)
+    setSubmitPhase('idle')
+    autoSubmitStartedRef.current = false
   }
 
   const handleSignOut = async () => {
@@ -226,11 +225,15 @@ function App() {
     if (isLoggedIn || !isMsalConfigured()) {
       return
     }
-    const account = getActiveMicrosoftAccount()
-    if (!account) {
-      return
-    }
-    signIn(toUserData(account))
+
+    void (async () => {
+      const account = await getActiveMicrosoftAccount()
+      if (!account) {
+        return
+      }
+
+      signIn(toUserData(account))
+    })()
   }, [isLoggedIn, signIn])
 
   useEffect(() => {
