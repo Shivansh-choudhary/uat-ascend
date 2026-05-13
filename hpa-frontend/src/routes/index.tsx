@@ -117,29 +117,42 @@ const ENTITY_OPTIONS = [
   'Other',
 ] as const
 
-type ProfileErrors = Partial<Record<keyof UserData, string>>
+type ProfileErrors = Partial<Record<keyof UserData | 'otherEntity', string>>
 
-const pageBackgroundStyle = {
+const surveyBackgroundStyle = {
   backgroundImage:
-    "linear-gradient(rgba(248, 245, 235, 0.52), rgba(248, 245, 235, 0.62)), url('/talent_background.PNG')",
+    "linear-gradient(rgba(248, 245, 235, 0.58), rgba(248, 245, 235, 0.68)), url('/talent_background.PNG')",
   backgroundPosition: 'left center',
   backgroundRepeat: 'no-repeat',
   backgroundSize: 'cover',
 }
 
-function normalizeUserData(value: UserData): UserData {
+function buildAuthPanelStyle() {
+  return {
+    backgroundImage:
+      "linear-gradient(rgba(33, 27, 30, 0.74), rgba(33, 27, 30, 0.74)), url('/talent_background.PNG')",
+    backgroundPosition: 'center',
+    backgroundRepeat: 'no-repeat',
+    backgroundSize: 'cover',
+  }
+}
+
+function normalizeUserData(value: UserData, otherEntity: string): UserData {
+  const normalizedOtherEntity = otherEntity.trim()
+
   return {
     employeeCode: value.employeeCode.trim(),
     name: value.name.trim(),
     email: value.email.trim().toLowerCase(),
     Department: value.Department.trim(),
     Designation: value.Designation.trim(),
-    entity: value.entity.trim(),
+    entity:
+      value.entity.trim() === 'Other' ? normalizedOtherEntity : value.entity.trim(),
   }
 }
 
-function validateUserData(value: UserData): ProfileErrors {
-  const normalized = normalizeUserData(value)
+function validateUserData(value: UserData, otherEntity: string): ProfileErrors {
+  const normalized = normalizeUserData(value, otherEntity)
   const errors: ProfileErrors = {}
 
   if (!normalized.employeeCode) {
@@ -162,6 +175,9 @@ function validateUserData(value: UserData): ProfileErrors {
   if (!normalized.entity) {
     errors.entity = 'Entity is required.'
   }
+  if (value.entity.trim() === 'Other' && !otherEntity.trim()) {
+    errors.otherEntity = 'Please enter the entity name.'
+  }
 
   return errors
 }
@@ -181,6 +197,7 @@ function App() {
   const [showProfileForm, setShowProfileForm] = useState(false)
   const [profileForm, setProfileForm] = useState<UserData>(() => createEmptyUserData())
   const [profileErrors, setProfileErrors] = useState<ProfileErrors>({})
+  const [otherEntity, setOtherEntity] = useState('')
   const [remainingMinutes, setRemainingMinutes] = useState(7)
   const [timerRunId, setTimerRunId] = useState(0)
   const [isCheckingCompletion, setIsCheckingCompletion] = useState(false)
@@ -261,12 +278,21 @@ function App() {
 
   const updateProfileField = (field: keyof UserData, value: string) => {
     setProfileForm((current) => ({ ...current, [field]: value }))
-    setProfileErrors((current) => ({ ...current, [field]: undefined }))
+    setProfileErrors((current) => ({
+      ...current,
+      [field]: undefined,
+      ...(field === 'entity' ? { otherEntity: undefined } : null),
+    }))
+
+    if (field === 'entity' && value !== 'Other') {
+      setOtherEntity('')
+    }
   }
 
   const resetProfileForm = () => {
     setProfileForm(createEmptyUserData())
     setProfileErrors({})
+    setOtherEntity('')
   }
 
   const handleLogin = () => {
@@ -277,13 +303,13 @@ function App() {
   const handleProfileSubmit = (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault()
 
-    const errors = validateUserData(profileForm)
+    const errors = validateUserData(profileForm, otherEntity)
     if (Object.keys(errors).length > 0) {
       setProfileErrors(errors)
       return
     }
 
-    signIn(normalizeUserData(profileForm))
+    signIn(normalizeUserData(profileForm, otherEntity))
     resetAssessment()
     setRemainingMinutes(7)
     setTimerRunId((v) => v + 1)
@@ -453,155 +479,238 @@ function App() {
   }, [answersArray, currentQuestionId, isTimeUp, visibleQuestions])
 
   return (
-    <div className="min-h-[calc(100vh-72px)]" style={pageBackgroundStyle}>
+    <div className="min-h-[calc(100vh-72px)]" style={surveyBackgroundStyle}>
       {!isLoggedIn && !showProfileForm ? (
-        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1400px] items-center justify-center px-4 py-8 sm:px-6 lg:justify-end lg:px-10">
-          <div className="w-full max-w-xl rounded-3xl border border-white/45 bg-white/72 p-6 shadow-xl backdrop-blur-sm sm:p-8 lg:mr-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
-              HPAQ Self Assessment
-            </p>
-            <h1 className="mt-3 text-4xl font-semibold tracking-tight">
-              Welcome to the High Potential Assessment Questionnaire
-            </h1>
-            <p className="mt-4 text-base text-muted-foreground">
-              Start with the sign-in button, then complete your employee details to move
-              into the survey.
-            </p>
-            <Button className="mt-8 w-full sm:w-auto" size="lg" onClick={handleLogin}>
-              Sign in to get started
-            </Button>
+        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1440px] items-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <div className="grid min-h-[calc(100vh-120px)] w-full overflow-hidden rounded-[32px] border border-black/8 bg-white shadow-2xl lg:grid-cols-[1.15fr_0.85fr]">
+            <section
+              className="relative flex min-h-[260px] items-end px-6 py-8 text-white sm:px-10 sm:py-10 lg:min-h-full lg:px-12 lg:py-12"
+              style={buildAuthPanelStyle()}
+            >
+              <div className="max-w-md">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-white/75">
+                  Sobha Ascend
+                </p>
+                <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                  Welcome to the High Potential Assessment Questionnaire
+                </h1>
+                <p className="mt-4 text-sm leading-6 text-white/80 sm:text-base">
+                  Start with sign in, complete your employee details, and continue to
+                  the survey experience.
+                </p>
+              </div>
+            </section>
+
+            <section className="flex items-center justify-center bg-white px-5 py-8 sm:px-8 lg:px-12">
+              <div className="w-full max-w-md">
+                <div className="text-center">
+                  <p className="text-xs font-semibold uppercase tracking-[0.26em] text-muted-foreground">
+                    Sobha Ascend
+                  </p>
+                  <h2 className="mt-3 text-3xl font-semibold tracking-tight">Sign in</h2>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Use the button below to continue into the assessment flow.
+                  </p>
+                </div>
+
+                <div className="mt-8 rounded-3xl border border-border/80 bg-white p-6 shadow-sm">
+                  <Button className="w-full" size="lg" onClick={handleLogin}>
+                    Sign in to get started
+                  </Button>
+                </div>
+              </div>
+            </section>
           </div>
         </div>
       ) : null}
 
       {!isLoggedIn && showProfileForm ? (
-        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1400px] items-center justify-center px-4 py-8 sm:px-6 lg:justify-end lg:px-10">
-          <section className="w-full max-w-3xl rounded-3xl border border-white/45 bg-white/78 p-6 shadow-xl backdrop-blur-sm sm:p-8 lg:mr-2">
-            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-              Employee Details
-            </p>
-            <h2 className="mt-2 text-3xl font-semibold">
-              High Potential Assessment Questionnaire
-            </h2>
-            <p className="mt-3 text-sm text-muted-foreground">
-              Fill in all mandatory details before you move to the survey.
-            </p>
-
-            <form className="mt-8 space-y-6" onSubmit={handleProfileSubmit}>
-              <div className="grid gap-5 md:grid-cols-2">
-                <div className="space-y-2">
-                  <Label htmlFor="employeeCode">Employee Code *</Label>
-                  <Input
-                    id="employeeCode"
-                    value={profileForm.employeeCode}
-                    onChange={(event) => updateProfileField('employeeCode', event.target.value)}
-                    aria-invalid={Boolean(profileErrors.employeeCode)}
-                    placeholder="Enter employee code"
-                  />
-                  {profileErrors.employeeCode ? (
-                    <p className="text-sm text-destructive">{profileErrors.employeeCode}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="email">Email Address *</Label>
-                  <Input
-                    id="email"
-                    type="email"
-                    value={profileForm.email}
-                    onChange={(event) => updateProfileField('email', event.target.value)}
-                    aria-invalid={Boolean(profileErrors.email)}
-                    placeholder="Enter email address"
-                  />
-                  {profileErrors.email ? (
-                    <p className="text-sm text-destructive">{profileErrors.email}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="name">Employee Name *</Label>
-                  <Input
-                    id="name"
-                    value={profileForm.name}
-                    onChange={(event) => updateProfileField('name', event.target.value)}
-                    aria-invalid={Boolean(profileErrors.name)}
-                    placeholder="Enter employee name"
-                  />
-                  {profileErrors.name ? (
-                    <p className="text-sm text-destructive">{profileErrors.name}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="designation">Designation *</Label>
-                  <Input
-                    id="designation"
-                    value={profileForm.Designation}
-                    onChange={(event) => updateProfileField('Designation', event.target.value)}
-                    aria-invalid={Boolean(profileErrors.Designation)}
-                    placeholder="Enter designation"
-                  />
-                  {profileErrors.Designation ? (
-                    <p className="text-sm text-destructive">{profileErrors.Designation}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="department">Department *</Label>
-                  <Input
-                    id="department"
-                    value={profileForm.Department}
-                    onChange={(event) => updateProfileField('Department', event.target.value)}
-                    aria-invalid={Boolean(profileErrors.Department)}
-                    placeholder="Enter department"
-                  />
-                  {profileErrors.Department ? (
-                    <p className="text-sm text-destructive">{profileErrors.Department}</p>
-                  ) : null}
-                </div>
-
-                <div className="space-y-2">
-                  <Label htmlFor="entity">Entity *</Label>
-                  <select
-                    id="entity"
-                    value={profileForm.entity}
-                    onChange={(event) => updateProfileField('entity', event.target.value)}
-                    aria-invalid={Boolean(profileErrors.entity)}
-                    className={cn(
-                      'h-10 w-full rounded-md border border-input bg-white/88 px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                      profileErrors.entity
-                        ? 'border-destructive ring-destructive/20'
-                        : undefined,
-                    )}
-                  >
-                    <option value="">Select entity</option>
-                    {ENTITY_OPTIONS.map((option) => (
-                      <option key={option} value={option}>
-                        {option}
-                      </option>
-                    ))}
-                  </select>
-                  {profileErrors.entity ? (
-                    <p className="text-sm text-destructive">{profileErrors.entity}</p>
-                  ) : null}
-                </div>
+        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1440px] items-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
+          <div className="grid min-h-[calc(100vh-120px)] w-full overflow-hidden rounded-[32px] border border-black/8 bg-white shadow-2xl lg:grid-cols-[1.15fr_0.85fr]">
+            <section
+              className="relative flex min-h-[240px] items-end px-6 py-8 text-white sm:px-10 sm:py-10 lg:min-h-full lg:px-12 lg:py-12"
+              style={buildAuthPanelStyle()}
+            >
+              <div className="max-w-md">
+                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-white/75">
+                  Sobha Ascend
+                </p>
+                <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+                  Welcome to the High Potential Assessment Questionnaire
+                </h2>
+                <p className="mt-4 text-sm leading-6 text-white/80 sm:text-base">
+                  Complete the required employee details to continue into the survey.
+                </p>
               </div>
+            </section>
 
-              <div className="flex flex-wrap justify-end gap-3">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => {
-                    resetProfileForm()
-                    setShowProfileForm(false)
-                  }}
-                >
-                  Back
-                </Button>
-                <Button type="submit">Next</Button>
+            <section className="flex items-center justify-center bg-white px-5 py-8 sm:px-8 lg:px-10">
+              <div className="w-full max-w-2xl">
+                <p className="text-xs font-semibold uppercase tracking-[0.26em] text-muted-foreground">
+                  Sobha Ascend
+                </p>
+                <h3 className="mt-3 text-3xl font-semibold tracking-tight">
+                  Employee Details
+                </h3>
+                <p className="mt-3 text-sm text-muted-foreground">
+                  Fill in all mandatory details before you move to the survey.
+                </p>
+
+                <form className="mt-8 space-y-6" onSubmit={handleProfileSubmit}>
+                  <div className="grid gap-5 md:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="employeeCode">Employee Code *</Label>
+                      <Input
+                        id="employeeCode"
+                        value={profileForm.employeeCode}
+                        onChange={(event) =>
+                          updateProfileField('employeeCode', event.target.value)
+                        }
+                        aria-invalid={Boolean(profileErrors.employeeCode)}
+                        placeholder="Enter employee code"
+                      />
+                      {profileErrors.employeeCode ? (
+                        <p className="text-sm text-destructive">
+                          {profileErrors.employeeCode}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="email">Email Address *</Label>
+                      <Input
+                        id="email"
+                        type="email"
+                        value={profileForm.email}
+                        onChange={(event) =>
+                          updateProfileField('email', event.target.value)
+                        }
+                        aria-invalid={Boolean(profileErrors.email)}
+                        placeholder="Enter email address"
+                      />
+                      {profileErrors.email ? (
+                        <p className="text-sm text-destructive">{profileErrors.email}</p>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Employee Name *</Label>
+                      <Input
+                        id="name"
+                        value={profileForm.name}
+                        onChange={(event) => updateProfileField('name', event.target.value)}
+                        aria-invalid={Boolean(profileErrors.name)}
+                        placeholder="Enter employee name"
+                      />
+                      {profileErrors.name ? (
+                        <p className="text-sm text-destructive">{profileErrors.name}</p>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="designation">Designation *</Label>
+                      <Input
+                        id="designation"
+                        value={profileForm.Designation}
+                        onChange={(event) =>
+                          updateProfileField('Designation', event.target.value)
+                        }
+                        aria-invalid={Boolean(profileErrors.Designation)}
+                        placeholder="Enter designation"
+                      />
+                      {profileErrors.Designation ? (
+                        <p className="text-sm text-destructive">
+                          {profileErrors.Designation}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="department">Department *</Label>
+                      <Input
+                        id="department"
+                        value={profileForm.Department}
+                        onChange={(event) =>
+                          updateProfileField('Department', event.target.value)
+                        }
+                        aria-invalid={Boolean(profileErrors.Department)}
+                        placeholder="Enter department"
+                      />
+                      {profileErrors.Department ? (
+                        <p className="text-sm text-destructive">
+                          {profileErrors.Department}
+                        </p>
+                      ) : null}
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label htmlFor="entity">Entity *</Label>
+                      <select
+                        id="entity"
+                        value={profileForm.entity}
+                        onChange={(event) => updateProfileField('entity', event.target.value)}
+                        aria-invalid={Boolean(profileErrors.entity)}
+                        className={cn(
+                          'h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                          profileErrors.entity
+                            ? 'border-destructive ring-destructive/20'
+                            : undefined,
+                        )}
+                      >
+                        <option value="">Select entity</option>
+                        {ENTITY_OPTIONS.map((option) => (
+                          <option key={option} value={option}>
+                            {option}
+                          </option>
+                        ))}
+                      </select>
+                      {profileErrors.entity ? (
+                        <p className="text-sm text-destructive">{profileErrors.entity}</p>
+                      ) : null}
+                    </div>
+
+                    {profileForm.entity === 'Other' ? (
+                      <div className="space-y-2 md:col-span-2">
+                        <Label htmlFor="otherEntity">Other Entity *</Label>
+                        <Input
+                          id="otherEntity"
+                          value={otherEntity}
+                          onChange={(event) => {
+                            setOtherEntity(event.target.value)
+                            setProfileErrors((current) => ({
+                              ...current,
+                              otherEntity: undefined,
+                            }))
+                          }}
+                          aria-invalid={Boolean(profileErrors.otherEntity)}
+                          placeholder="Enter entity name"
+                        />
+                        {profileErrors.otherEntity ? (
+                          <p className="text-sm text-destructive">
+                            {profileErrors.otherEntity}
+                          </p>
+                        ) : null}
+                      </div>
+                    ) : null}
+                  </div>
+
+                  <div className="flex flex-wrap justify-end gap-3">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => {
+                        resetProfileForm()
+                        setShowProfileForm(false)
+                      }}
+                    >
+                      Back
+                    </Button>
+                    <Button type="submit">Next</Button>
+                  </div>
+                </form>
               </div>
-            </form>
-          </section>
+            </section>
+          </div>
         </div>
       ) : null}
 
