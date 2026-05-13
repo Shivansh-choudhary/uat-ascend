@@ -1,7 +1,6 @@
 import { Button } from '#/components/ui/button'
 import { logoutMicrosoft } from '#/lib/msal-auth'
 import { useAssessmentStore } from '#/store/assessment-store'
-import ThemeToggle from './ThemeToggle'
 
 export default function Header() {
   const { isLoggedIn, signOut, resetAssessment } = useAssessmentStore()
@@ -24,14 +23,11 @@ export default function Header() {
           <span className="h-2.5 w-2.5 rounded-full bg-current" />
           HPAQ Self Assessment
         </a>
-        <div className="flex items-center gap-2">
-          <ThemeToggle />
-          {isLoggedIn ? (
-            <Button variant="outline" size="sm" onClick={() => void handleSignOut()}>
-              Sign out
-            </Button>
-          ) : null}
-        </div>
+        {isLoggedIn ? (
+          <Button variant="outline" size="sm" onClick={() => void handleSignOut()}>
+            Sign out
+          </Button>
+        ) : null}
       </nav>
     </header>
   )

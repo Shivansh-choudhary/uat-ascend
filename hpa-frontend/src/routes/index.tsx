@@ -23,13 +23,6 @@ import {
 import { Input } from '#/components/ui/input'
 import { Label } from '#/components/ui/label'
 import { Progress } from '#/components/ui/progress'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '#/components/ui/select'
 import { cn } from '#/lib/utils'
 import { Separator } from '#/components/ui/separator'
 
@@ -128,8 +121,8 @@ type ProfileErrors = Partial<Record<keyof UserData, string>>
 
 const pageBackgroundStyle = {
   backgroundImage:
-    "linear-gradient(rgba(248, 245, 235, 0.88), rgba(248, 245, 235, 0.92)), url('/talent_background.PNG')",
-  backgroundPosition: 'center',
+    "linear-gradient(rgba(248, 245, 235, 0.52), rgba(248, 245, 235, 0.62)), url('/talent_background.PNG')",
+  backgroundPosition: 'left center',
   backgroundRepeat: 'no-repeat',
   backgroundSize: 'cover',
 }
@@ -462,8 +455,8 @@ function App() {
   return (
     <div className="min-h-[calc(100vh-72px)]" style={pageBackgroundStyle}>
       {!isLoggedIn && !showProfileForm ? (
-        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1400px] items-center px-6 py-10">
-          <div className="max-w-xl rounded-3xl border border-white/50 bg-white/75 p-8 shadow-xl backdrop-blur-sm">
+        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1400px] items-center justify-center px-4 py-8 sm:px-6 lg:justify-end lg:px-10">
+          <div className="w-full max-w-xl rounded-3xl border border-white/45 bg-white/72 p-6 shadow-xl backdrop-blur-sm sm:p-8 lg:mr-2">
             <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
               HPAQ Self Assessment
             </p>
@@ -482,8 +475,8 @@ function App() {
       ) : null}
 
       {!isLoggedIn && showProfileForm ? (
-        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1400px] items-center px-6 py-10">
-          <section className="w-full max-w-3xl rounded-3xl border border-white/50 bg-white/85 p-8 shadow-xl backdrop-blur-sm">
+        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1400px] items-center justify-center px-4 py-8 sm:px-6 lg:justify-end lg:px-10">
+          <section className="w-full max-w-3xl rounded-3xl border border-white/45 bg-white/78 p-6 shadow-xl backdrop-blur-sm sm:p-8 lg:mr-2">
             <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
               Employee Details
             </p>
@@ -569,25 +562,25 @@ function App() {
 
                 <div className="space-y-2">
                   <Label htmlFor="entity">Entity *</Label>
-                  <Select
+                  <select
+                    id="entity"
                     value={profileForm.entity}
-                    onValueChange={(value) => updateProfileField('entity', value)}
+                    onChange={(event) => updateProfileField('entity', event.target.value)}
+                    aria-invalid={Boolean(profileErrors.entity)}
+                    className={cn(
+                      'h-10 w-full rounded-md border border-input bg-white/88 px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
+                      profileErrors.entity
+                        ? 'border-destructive ring-destructive/20'
+                        : undefined,
+                    )}
                   >
-                    <SelectTrigger
-                      id="entity"
-                      className="w-full bg-background/80"
-                      aria-invalid={Boolean(profileErrors.entity)}
-                    >
-                      <SelectValue placeholder="Select entity" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {ENTITY_OPTIONS.map((option) => (
-                        <SelectItem key={option} value={option}>
-                          {option}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                    <option value="">Select entity</option>
+                    {ENTITY_OPTIONS.map((option) => (
+                      <option key={option} value={option}>
+                        {option}
+                      </option>
+                    ))}
+                  </select>
                   {profileErrors.entity ? (
                     <p className="text-sm text-destructive">{profileErrors.entity}</p>
                   ) : null}
@@ -613,9 +606,9 @@ function App() {
       ) : null}
 
       {isLoggedIn ? (
-        <main className="mx-auto w-full max-w-[1200px] p-4">
+        <main className="mx-auto w-full max-w-[1200px] p-4 sm:p-6">
           {isCheckingCompletion ? (
-            <section className="rounded-xl bg-card/90 p-6 backdrop-blur-sm">
+            <section className="rounded-xl bg-card/78 p-6 backdrop-blur-sm">
               <p className="text-sm text-muted-foreground">
                 Checking your assessment status...
               </p>
@@ -623,7 +616,7 @@ function App() {
           ) : null}
 
           {!isCheckingCompletion && hasCompletedAssessment ? (
-            <section className="rounded-xl border border-default bg-card/90 p-6 shadow-xs backdrop-blur-sm">
+            <section className="rounded-xl border border-default bg-card/78 p-6 shadow-xs backdrop-blur-sm">
               <h2 className="text-xl font-semibold">You already finished the assessment.</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 This account has already submitted a response.
@@ -637,7 +630,7 @@ function App() {
           {!isCheckingCompletion &&
           !hasCompletedAssessment &&
           submitPhase === 'thanks' ? (
-            <section className="rounded-xl border border-default bg-card/90 p-8 shadow-xs backdrop-blur-sm">
+            <section className="rounded-xl border border-default bg-card/78 p-8 shadow-xs backdrop-blur-sm">
               <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Thank you
               </p>
@@ -657,18 +650,18 @@ function App() {
           !hasCompletedAssessment &&
           submitPhase !== 'thanks' ? (
             <>
-          <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl bg-white/65 p-4 backdrop-blur-sm">
+          <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-white/62 p-4 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between">
             <div>
               <h1 className="text-2xl font-semibold">Hi, {userData.name}</h1>
-              <div className="mt-2 flex items-center gap-2">
+              <div className="mt-2 flex flex-wrap items-center gap-2">
                 <Badge variant="secondary">Designation: {userData.Designation}</Badge>
                 <Badge variant="outline">Department: {userData.Department}</Badge>
               </div>
             </div>
-            <p className="pt-1 text-lg font-semibold">Time left: {remainingMinutes} min</p>
+            <p className="pt-1 text-lg font-semibold sm:text-right">Time left: {remainingMinutes} min</p>
           </div>
 
-          <section className="w-full rounded-xl bg-card/90 p-4 backdrop-blur-sm">
+          <section className="w-full rounded-xl bg-card/78 p-4 backdrop-blur-sm">
             <div className="mb-2">
               <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Self Assessment
@@ -700,7 +693,7 @@ function App() {
             </div>
 
             {submitPhase === 'error' && isCompleted ? (
-              <div className="w-full rounded-md border border-destructive/50 bg-card/95 p-6 backdrop-blur-sm">
+              <div className="w-full rounded-md border border-destructive/50 bg-card/82 p-6 backdrop-blur-sm">
                 <p className="font-medium text-destructive">
                   We could not save your responses.
                 </p>
@@ -726,14 +719,14 @@ function App() {
                 </Button>
               </div>
             ) : isCompleted ? (
-              <div className="w-full rounded-md border border-default bg-card/95 p-8 text-center backdrop-blur-sm">
+              <div className="w-full rounded-md border border-default bg-card/82 p-8 text-center backdrop-blur-sm">
                 <p className="text-base font-medium">Saving your responses…</p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Please wait a moment.
                 </p>
               </div>
             ) : (
-              <div className="w-full rounded-md border border-default bg-card/95 p-3 shadow-xs backdrop-blur-sm">
+              <div className="w-full rounded-md border border-default bg-card/82 p-3 shadow-xs backdrop-blur-sm">
 
                 <div className="mt-3 space-y-5">
                   {visibleQuestions.map((question) => {
