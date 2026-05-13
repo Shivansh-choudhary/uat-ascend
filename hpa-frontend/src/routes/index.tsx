@@ -481,10 +481,10 @@ function App() {
   return (
     <div className="min-h-[calc(100vh-72px)]" style={surveyBackgroundStyle}>
       {!isLoggedIn && !showProfileForm ? (
-        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1440px] items-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-          <div className="grid min-h-[calc(100vh-120px)] w-full overflow-hidden rounded-[32px] border border-black/8 bg-white shadow-2xl lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="min-h-[calc(100vh-72px)] bg-white lg:grid lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="contents lg:contents">
             <section
-              className="relative flex min-h-[260px] items-end px-6 py-8 text-white sm:px-10 sm:py-10 lg:min-h-full lg:px-12 lg:py-12"
+              className="relative flex min-h-[280px] items-end px-6 py-8 text-white sm:px-10 sm:py-10 lg:min-h-[calc(100vh-72px)] lg:px-12 lg:py-12 xl:px-16"
               style={buildAuthPanelStyle()}
             >
               <div className="max-w-md">
@@ -501,7 +501,7 @@ function App() {
               </div>
             </section>
 
-            <section className="flex items-center justify-center bg-white px-5 py-8 sm:px-8 lg:px-12">
+            <section className="flex items-center justify-center bg-white px-5 py-10 sm:px-8 lg:min-h-[calc(100vh-72px)] lg:px-12 xl:px-16">
               <div className="w-full max-w-md">
                 <div className="text-center">
                   <p className="text-xs font-semibold uppercase tracking-[0.26em] text-muted-foreground">
@@ -513,11 +513,9 @@ function App() {
                   </p>
                 </div>
 
-                <div className="mt-8 rounded-3xl border border-border/80 bg-white p-6 shadow-sm">
-                  <Button className="w-full" size="lg" onClick={handleLogin}>
-                    Sign in to get started
-                  </Button>
-                </div>
+                <Button className="mt-8 w-full" size="lg" onClick={handleLogin}>
+                  Sign in to get started
+                </Button>
               </div>
             </section>
           </div>
@@ -525,10 +523,10 @@ function App() {
       ) : null}
 
       {!isLoggedIn && showProfileForm ? (
-        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1440px] items-center px-4 py-6 sm:px-6 sm:py-8 lg:px-8">
-          <div className="grid min-h-[calc(100vh-120px)] w-full overflow-hidden rounded-[32px] border border-black/8 bg-white shadow-2xl lg:grid-cols-[1.15fr_0.85fr]">
+        <div className="min-h-[calc(100vh-72px)] bg-white lg:grid lg:grid-cols-[1.15fr_0.85fr]">
+          <div className="contents lg:contents">
             <section
-              className="relative flex min-h-[240px] items-end px-6 py-8 text-white sm:px-10 sm:py-10 lg:min-h-full lg:px-12 lg:py-12"
+              className="relative flex min-h-[280px] items-end px-6 py-8 text-white sm:px-10 sm:py-10 lg:min-h-[calc(100vh-72px)] lg:px-12 lg:py-12 xl:px-16"
               style={buildAuthPanelStyle()}
             >
               <div className="max-w-md">
@@ -544,7 +542,7 @@ function App() {
               </div>
             </section>
 
-            <section className="flex items-center justify-center bg-white px-5 py-8 sm:px-8 lg:px-10">
+            <section className="flex items-center justify-center bg-white px-5 py-10 sm:px-8 lg:min-h-[calc(100vh-72px)] lg:px-10 xl:px-14">
               <div className="w-full max-w-2xl">
                 <p className="text-xs font-semibold uppercase tracking-[0.26em] text-muted-foreground">
                   Sobha Ascend
