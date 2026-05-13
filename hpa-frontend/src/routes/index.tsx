@@ -117,6 +117,8 @@ const ENTITY_OPTIONS = [
   'Other',
 ] as const
 
+const ASSESSMENT_DURATION_SECONDS = 7 * 60
+
 type ProfileErrors = Partial<Record<keyof UserData | 'otherEntity', string>>
 
 const surveyBackgroundStyle = {
@@ -182,6 +184,13 @@ function validateUserData(value: UserData, otherEntity: string): ProfileErrors {
   return errors
 }
 
+function formatCountdown(totalSeconds: number) {
+  const minutes = Math.floor(totalSeconds / 60)
+  const seconds = totalSeconds % 60
+
+  return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`
+}
+
 function App() {
   const {
     currentQuestionId,
@@ -198,7 +207,7 @@ function App() {
   const [profileForm, setProfileForm] = useState<UserData>(() => createEmptyUserData())
   const [profileErrors, setProfileErrors] = useState<ProfileErrors>({})
   const [otherEntity, setOtherEntity] = useState('')
-  const [remainingMinutes, setRemainingMinutes] = useState(7)
+  const [remainingSeconds, setRemainingSeconds] = useState(ASSESSMENT_DURATION_SECONDS)
   const [timerRunId, setTimerRunId] = useState(0)
   const [isCheckingCompletion, setIsCheckingCompletion] = useState(false)
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState(false)
@@ -215,7 +224,8 @@ function App() {
   const isCompleted = answeredCount === questions.length
   const currentPageStart = Math.floor((currentQuestionId - 1) / 5) * 5
   const visibleQuestions = questions.slice(currentPageStart, currentPageStart + 5)
-  const isTimeUp = remainingMinutes <= 0
+  const isTimeUp = remainingSeconds <= 0
+  const countdownLabel = formatCountdown(remainingSeconds)
   const buildResultPayload = (): ResultData => {
     const answersMap = answersArray.reduce<Record<number, number>>(
       (acc, value, index) => {
@@ -311,7 +321,7 @@ function App() {
 
     signIn(normalizeUserData(profileForm, otherEntity))
     resetAssessment()
-    setRemainingMinutes(7)
+    setRemainingSeconds(ASSESSMENT_DURATION_SECONDS)
     setTimerRunId((v) => v + 1)
     setSubmitPhase('idle')
     autoSubmitStartedRef.current = false
@@ -366,10 +376,10 @@ function App() {
   ])
 
   useEffect(() => {
-    const deadline = Date.now() + 7 * 60 * 1000
+    const deadline = Date.now() + ASSESSMENT_DURATION_SECONDS * 1000
     const timerId = window.setInterval(() => {
       const diff = Math.max(deadline - Date.now(), 0)
-      setRemainingMinutes(Math.ceil(diff / 60000))
+      setRemainingSeconds(Math.ceil(diff / 1000))
     }, 1000)
 
     return () => {
@@ -765,7 +775,12 @@ function App() {
                 <Badge variant="outline">Department: {userData.Department}</Badge>
               </div>
             </div>
-            <p className="pt-1 text-lg font-semibold sm:text-right">Time left: {remainingMinutes} min</p>
+            <div className="rounded-xl border border-border/80 bg-white/80 px-4 py-2 text-center shadow-xs sm:text-right">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                Time Left
+              </p>
+              <p className="mt-1 text-2xl font-semibold tabular-nums">{countdownLabel}</p>
+            </div>
           </div>
 
           <section className="w-full rounded-xl bg-card/78 p-4 backdrop-blur-sm">
@@ -780,23 +795,6 @@ function App() {
                   {answeredCount}/{questions.length} complete ({completionPercent}%)
                 </p>
               </div>
-            </div>
-
-            <div className="mb-3 flex justify-end">
-              <Button
-                size="sm"
-                variant="outline"
-                disabled={isCompleted || submitPhase === 'submitting'}
-                onClick={() => {
-                  resetAssessment()
-                  setRemainingMinutes(7)
-                  setTimerRunId((v) => v + 1)
-                  setSubmitPhase('idle')
-                  autoSubmitStartedRef.current = false
-                }}
-              >
-                Reset (Test)
-              </Button>
             </div>
 
             {submitPhase === 'error' && isCompleted ? (
