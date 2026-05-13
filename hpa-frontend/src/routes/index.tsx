@@ -1,5 +1,5 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
 import {
   answerOptions,
   categories,
@@ -9,14 +9,27 @@ import {
 } from '#/lib/assessment'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
-import { useAssessmentStore } from '#/store/assessment-store'
+import {
+  createEmptyUserData,
+  type UserData,
+  useAssessmentStore,
+} from '#/store/assessment-store'
 import {
   getActiveMicrosoftAccount,
   isMsalConfigured,
   logoutMicrosoft,
   toUserData,
 } from '#/lib/msal-auth'
+import { Input } from '#/components/ui/input'
+import { Label } from '#/components/ui/label'
 import { Progress } from '#/components/ui/progress'
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '#/components/ui/select'
 import { cn } from '#/lib/utils'
 import { Separator } from '#/components/ui/separator'
 
@@ -81,12 +94,7 @@ function calculateCategoryResults(
 }
 
 interface ResultData {
-  userData: {
-    name: string
-    email: string
-    Department: string
-    Designation: string
-  }
+  userData: UserData
   categoryResults: CategoryResult
   questionsAnswered: number[]
 }
@@ -98,15 +106,71 @@ const DEFAULT_API_BASE_URL =
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL
 
-function buildDemoUserData() {
-  const sessionId = Date.now()
+const ENTITY_OPTIONS = [
+  'Beauty',
+  'Construction',
+  'PMC',
+  'Sobha Community Management',
+  'LFM',
+  'Sobha Concrete',
+  'Lanfam Landscaping',
+  'Advanced Manufacturing',
+  'Sobha Modular & Facade',
+  'Sobha Energy Solutions',
+  'Sobha Realty Abu Dhabi',
+  'Al Siniya',
+  'Furniture',
+  'Stay By Latinem',
+  'Other',
+] as const
 
+type ProfileErrors = Partial<Record<keyof UserData, string>>
+
+const pageBackgroundStyle = {
+  backgroundImage:
+    "linear-gradient(rgba(248, 245, 235, 0.88), rgba(248, 245, 235, 0.92)), url('/talent_background.PNG')",
+  backgroundPosition: 'center',
+  backgroundRepeat: 'no-repeat',
+  backgroundSize: 'cover',
+}
+
+function normalizeUserData(value: UserData): UserData {
   return {
-    name: 'Demo User',
-    email: `demo-${sessionId}@local.test`,
-    Department: 'Demo',
-    Designation: 'Presenter',
+    employeeCode: value.employeeCode.trim(),
+    name: value.name.trim(),
+    email: value.email.trim().toLowerCase(),
+    Department: value.Department.trim(),
+    Designation: value.Designation.trim(),
+    entity: value.entity.trim(),
   }
+}
+
+function validateUserData(value: UserData): ProfileErrors {
+  const normalized = normalizeUserData(value)
+  const errors: ProfileErrors = {}
+
+  if (!normalized.employeeCode) {
+    errors.employeeCode = 'Employee code is required.'
+  }
+  if (!normalized.name) {
+    errors.name = 'Employee name is required.'
+  }
+  if (!normalized.email) {
+    errors.email = 'Email is required.'
+  } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(normalized.email)) {
+    errors.email = 'Enter a valid email address.'
+  }
+  if (!normalized.Designation) {
+    errors.Designation = 'Designation is required.'
+  }
+  if (!normalized.Department) {
+    errors.Department = 'Department is required.'
+  }
+  if (!normalized.entity) {
+    errors.entity = 'Entity is required.'
+  }
+
+  return errors
 }
 
 function App() {
@@ -121,6 +185,9 @@ function App() {
     signIn,
     signOut,
   } = useAssessmentStore()
+  const [showProfileForm, setShowProfileForm] = useState(false)
+  const [profileForm, setProfileForm] = useState<UserData>(() => createEmptyUserData())
+  const [profileErrors, setProfileErrors] = useState<ProfileErrors>({})
   const [remainingMinutes, setRemainingMinutes] = useState(7)
   const [timerRunId, setTimerRunId] = useState(0)
   const [isCheckingCompletion, setIsCheckingCompletion] = useState(false)
@@ -199,8 +266,31 @@ function App() {
     }
   }
 
-  const handleLogin = async () => {
-    signIn(buildDemoUserData())
+  const updateProfileField = (field: keyof UserData, value: string) => {
+    setProfileForm((current) => ({ ...current, [field]: value }))
+    setProfileErrors((current) => ({ ...current, [field]: undefined }))
+  }
+
+  const resetProfileForm = () => {
+    setProfileForm(createEmptyUserData())
+    setProfileErrors({})
+  }
+
+  const handleLogin = () => {
+    resetProfileForm()
+    setShowProfileForm(true)
+  }
+
+  const handleProfileSubmit = (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault()
+
+    const errors = validateUserData(profileForm)
+    if (Object.keys(errors).length > 0) {
+      setProfileErrors(errors)
+      return
+    }
+
+    signIn(normalizeUserData(profileForm))
     resetAssessment()
     setRemainingMinutes(7)
     setTimerRunId((v) => v + 1)
@@ -216,6 +306,8 @@ function App() {
     } finally {
       resetAssessment()
       signOut()
+      resetProfileForm()
+      setShowProfileForm(false)
       setSubmitPhase('idle')
       autoSubmitStartedRef.current = false
     }
@@ -368,35 +460,162 @@ function App() {
   }, [answersArray, currentQuestionId, isTimeUp, visibleQuestions])
 
   return (
-    <>
-      {!isLoggedIn ? (
-        <div className="flex justify-start gap-2 h-[calc(100vh-72px)] overflow-hidden">
-          <div className="w-fit overflow-hidden">
-            <img
-              src="/talentdev.jpg"
-              alt="Assessment welcome visual"
-              className="h-full w-full object-contain object-center"
-            />
+    <div className="min-h-[calc(100vh-72px)]" style={pageBackgroundStyle}>
+      {!isLoggedIn && !showProfileForm ? (
+        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1400px] items-center px-6 py-10">
+          <div className="max-w-xl rounded-3xl border border-white/50 bg-white/75 p-8 shadow-xl backdrop-blur-sm">
+            <p className="text-sm font-semibold uppercase tracking-[0.18em] text-muted-foreground">
+              HPAQ Self Assessment
+            </p>
+            <h1 className="mt-3 text-4xl font-semibold tracking-tight">
+              Welcome to the High Potential Assessment Questionnaire
+            </h1>
+            <p className="mt-4 text-base text-muted-foreground">
+              Start with the sign-in button, then complete your employee details to move
+              into the survey.
+            </p>
+            <Button className="mt-8 w-full sm:w-auto" size="lg" onClick={handleLogin}>
+              Sign in to get started
+            </Button>
           </div>
-          <div className="w-1/2 flex items-center justify-center p-10">
-            <div className="max-w-md w-full space-y-8">
-              <h1 className="text-3xl font-bold mb-4">Welcome to the HPAQ Self Assessment</h1>
-              <p className="text-muted-foreground mb-6">
-                Please sign in to start your self assessment.
-              </p>
-              <Button className="w-full" onClick={() => void handleLogin()}>
-                Sign in to get started
-              </Button>
-            </div>
-          </div>
+        </div>
+      ) : null}
 
+      {!isLoggedIn && showProfileForm ? (
+        <div className="mx-auto flex min-h-[calc(100vh-72px)] max-w-[1400px] items-center px-6 py-10">
+          <section className="w-full max-w-3xl rounded-3xl border border-white/50 bg-white/85 p-8 shadow-xl backdrop-blur-sm">
+            <p className="text-sm font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+              Employee Details
+            </p>
+            <h2 className="mt-2 text-3xl font-semibold">
+              High Potential Assessment Questionnaire
+            </h2>
+            <p className="mt-3 text-sm text-muted-foreground">
+              Fill in all mandatory details before you move to the survey.
+            </p>
+
+            <form className="mt-8 space-y-6" onSubmit={handleProfileSubmit}>
+              <div className="grid gap-5 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor="employeeCode">Employee Code *</Label>
+                  <Input
+                    id="employeeCode"
+                    value={profileForm.employeeCode}
+                    onChange={(event) => updateProfileField('employeeCode', event.target.value)}
+                    aria-invalid={Boolean(profileErrors.employeeCode)}
+                    placeholder="Enter employee code"
+                  />
+                  {profileErrors.employeeCode ? (
+                    <p className="text-sm text-destructive">{profileErrors.employeeCode}</p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="email">Email Address *</Label>
+                  <Input
+                    id="email"
+                    type="email"
+                    value={profileForm.email}
+                    onChange={(event) => updateProfileField('email', event.target.value)}
+                    aria-invalid={Boolean(profileErrors.email)}
+                    placeholder="Enter email address"
+                  />
+                  {profileErrors.email ? (
+                    <p className="text-sm text-destructive">{profileErrors.email}</p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="name">Employee Name *</Label>
+                  <Input
+                    id="name"
+                    value={profileForm.name}
+                    onChange={(event) => updateProfileField('name', event.target.value)}
+                    aria-invalid={Boolean(profileErrors.name)}
+                    placeholder="Enter employee name"
+                  />
+                  {profileErrors.name ? (
+                    <p className="text-sm text-destructive">{profileErrors.name}</p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="designation">Designation *</Label>
+                  <Input
+                    id="designation"
+                    value={profileForm.Designation}
+                    onChange={(event) => updateProfileField('Designation', event.target.value)}
+                    aria-invalid={Boolean(profileErrors.Designation)}
+                    placeholder="Enter designation"
+                  />
+                  {profileErrors.Designation ? (
+                    <p className="text-sm text-destructive">{profileErrors.Designation}</p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="department">Department *</Label>
+                  <Input
+                    id="department"
+                    value={profileForm.Department}
+                    onChange={(event) => updateProfileField('Department', event.target.value)}
+                    aria-invalid={Boolean(profileErrors.Department)}
+                    placeholder="Enter department"
+                  />
+                  {profileErrors.Department ? (
+                    <p className="text-sm text-destructive">{profileErrors.Department}</p>
+                  ) : null}
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="entity">Entity *</Label>
+                  <Select
+                    value={profileForm.entity}
+                    onValueChange={(value) => updateProfileField('entity', value)}
+                  >
+                    <SelectTrigger
+                      id="entity"
+                      className="w-full bg-background/80"
+                      aria-invalid={Boolean(profileErrors.entity)}
+                    >
+                      <SelectValue placeholder="Select entity" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {ENTITY_OPTIONS.map((option) => (
+                        <SelectItem key={option} value={option}>
+                          {option}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {profileErrors.entity ? (
+                    <p className="text-sm text-destructive">{profileErrors.entity}</p>
+                  ) : null}
+                </div>
+              </div>
+
+              <div className="flex flex-wrap justify-end gap-3">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => {
+                    resetProfileForm()
+                    setShowProfileForm(false)
+                  }}
+                >
+                  Back
+                </Button>
+                <Button type="submit">Next</Button>
+              </div>
+            </form>
+          </section>
         </div>
       ) : null}
 
       {isLoggedIn ? (
         <main className="mx-auto w-full max-w-[1200px] p-4">
           {isCheckingCompletion ? (
-            <section className="rounded-xl bg-card p-6">
+            <section className="rounded-xl bg-card/90 p-6 backdrop-blur-sm">
               <p className="text-sm text-muted-foreground">
                 Checking your assessment status...
               </p>
@@ -404,7 +623,7 @@ function App() {
           ) : null}
 
           {!isCheckingCompletion && hasCompletedAssessment ? (
-            <section className="rounded-xl border border-default bg-card p-6 shadow-xs">
+            <section className="rounded-xl border border-default bg-card/90 p-6 shadow-xs backdrop-blur-sm">
               <h2 className="text-xl font-semibold">You already finished the assessment.</h2>
               <p className="mt-2 text-sm text-muted-foreground">
                 This account has already submitted a response.
@@ -418,7 +637,7 @@ function App() {
           {!isCheckingCompletion &&
           !hasCompletedAssessment &&
           submitPhase === 'thanks' ? (
-            <section className="rounded-xl border border-default bg-card p-8 shadow-xs">
+            <section className="rounded-xl border border-default bg-card/90 p-8 shadow-xs backdrop-blur-sm">
               <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Thank you
               </p>
@@ -438,7 +657,7 @@ function App() {
           !hasCompletedAssessment &&
           submitPhase !== 'thanks' ? (
             <>
-          <div className="mb-4 flex items-start justify-between gap-3 p-2">
+          <div className="mb-4 flex items-start justify-between gap-3 rounded-2xl bg-white/65 p-4 backdrop-blur-sm">
             <div>
               <h1 className="text-2xl font-semibold">Hi, {userData.name}</h1>
               <div className="mt-2 flex items-center gap-2">
@@ -449,7 +668,7 @@ function App() {
             <p className="pt-1 text-lg font-semibold">Time left: {remainingMinutes} min</p>
           </div>
 
-          <section className="rounded-xl bg-card p-4 w-full">
+          <section className="w-full rounded-xl bg-card/90 p-4 backdrop-blur-sm">
             <div className="mb-2">
               <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 Self Assessment
@@ -481,7 +700,7 @@ function App() {
             </div>
 
             {submitPhase === 'error' && isCompleted ? (
-              <div className="w-full rounded-md border border-destructive/50 bg-card p-6">
+              <div className="w-full rounded-md border border-destructive/50 bg-card/95 p-6 backdrop-blur-sm">
                 <p className="font-medium text-destructive">
                   We could not save your responses.
                 </p>
@@ -507,14 +726,14 @@ function App() {
                 </Button>
               </div>
             ) : isCompleted ? (
-              <div className="w-full rounded-md border border-default bg-card p-8 text-center">
+              <div className="w-full rounded-md border border-default bg-card/95 p-8 text-center backdrop-blur-sm">
                 <p className="text-base font-medium">Saving your responses…</p>
                 <p className="mt-2 text-sm text-muted-foreground">
                   Please wait a moment.
                 </p>
               </div>
             ) : (
-              <div className="w-full border border-default rounded-md shadow-xs bg-card p-3">
+              <div className="w-full rounded-md border border-default bg-card/95 p-3 shadow-xs backdrop-blur-sm">
 
                 <div className="mt-3 space-y-5">
                   {visibleQuestions.map((question) => {
@@ -573,6 +792,6 @@ function App() {
           ) : null}
         </main>
       ) : null}
-    </>
+    </div>
   )
 }

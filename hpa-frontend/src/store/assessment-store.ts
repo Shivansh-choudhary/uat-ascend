@@ -2,11 +2,24 @@ import { create } from 'zustand'
 import { questions } from '#/lib/assessment'
 import type { AnswerWeight } from '#/lib/assessment'
 
-interface UserData {
+export interface UserData {
+  employeeCode: string
   name: string
   email: string
   Department: string
   Designation: string
+  entity: string
+}
+
+export function createEmptyUserData(): UserData {
+  return {
+    employeeCode: '',
+    name: '',
+    email: '',
+    Department: '',
+    Designation: '',
+    entity: '',
+  }
 }
 
 type AssessmentState = {
@@ -36,12 +49,7 @@ export const useAssessmentStore = create<AssessmentState>()((set, get) => ({
   currentQuestionId: 1,
   answersArray: [],
   isLoggedIn: false,
-  userData: {
-    name: '',
-    email: '',
-    Department: '',
-    Designation: '',
-  },
+  userData: createEmptyUserData(),
   setAnswerForQuestion: (questionId, value) => {
     const { answersArray } = get()
     const answerIndex = questionId - 1
@@ -67,6 +75,6 @@ export const useAssessmentStore = create<AssessmentState>()((set, get) => ({
   signOut: () =>
     set({
       isLoggedIn: false,
-      userData: { name: '', email: '', Department: '', Designation: '' },
+      userData: createEmptyUserData(),
     }),
 }))

@@ -35,6 +35,11 @@ const categorySchema = new mongoose.Schema(
 const surveyResponseSchema = new mongoose.Schema(
   {
     userData: {
+      employeeCode: {
+        type: String,
+        required: true,
+        trim: true
+      },
       name: {
         type: String,
         required: true,
@@ -48,14 +53,17 @@ const surveyResponseSchema = new mongoose.Schema(
       },
       Department: {
         type: String,
-        required: false,
-        default: "N/A",
+        required: true,
         trim: true
       },
       Designation: {
         type: String,
-        required: false,
-        default: "N/A",
+        required: true,
+        trim: true
+      },
+      entity: {
+        type: String,
+        required: true,
         trim: true
       }
     },

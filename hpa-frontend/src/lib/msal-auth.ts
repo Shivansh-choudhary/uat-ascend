@@ -3,6 +3,7 @@ import type {
   PopupRequest,
   PublicClientApplication,
 } from '@azure/msal-browser'
+import type { UserData } from '#/store/assessment-store'
 
 const clientId = import.meta.env.VITE_MSAL_CLIENT_ID
 const tenantId = import.meta.env.VITE_MSAL_TENANT_ID
@@ -102,13 +103,15 @@ export async function getActiveMicrosoftAccount() {
   return fallbackAccount
 }
 
-export function toUserData(account: AccountInfo) {
+export function toUserData(account: AccountInfo): UserData {
   const fullName = account.name ?? ''
   const [first, ...rest] = fullName.split(' ')
   return {
+    employeeCode: '',
     name: fullName || account.username,
     email: account.username,
     Department: '',
     Designation: rest.length > 0 ? rest.join(' ') : first || 'Employee',
+    entity: '',
   }
 }
