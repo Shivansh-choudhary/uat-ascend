@@ -1,7 +1,9 @@
 const dotenv = require("dotenv");
 const app = require("./app");
 const connectDB = require("./config/db");
-
+// dns is needed for new version of node
+// const dns = require("node:dns/promises");
+// dns.setServers(["1.1.1.1"]);
 dotenv.config();
 
 const PORT = process.env.PORT || 5001;

@@ -19,9 +19,9 @@ export default function Header() {
   return (
     <header className="sticky top-0 z-50 border-b border-border bg-background px-4">
       <nav className="mx-auto flex h-[72px] w-full max-w-[1400px] items-center justify-between">
-        <a href="/" className="flex items-center gap-2 text-sm font-semibold no-underline">
-          <span className="h-2.5 w-2.5 rounded-full bg-current" />
-          Sobha Ascend
+        <a href="/" className="flex items-center gap-2  font-semibold no-underline">
+          <img src="/logo-sobha.png" alt="Sobha Ascend Logo" className="h-10 w-10 object-contain" />
+          <span className=" text-difference text-2xl font-semibold">Sobha Ascend</span>
         </a>
         {isLoggedIn ? (
           <Button variant="outline" size="sm" onClick={() => void handleSignOut()}>

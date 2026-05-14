@@ -1,6 +1,7 @@
 const express = require("express");
 const cors = require("cors");
 
+
 const surveyRoutes = require("./routes/surveyRoutes");
 
 const app = express();
@@ -12,8 +13,8 @@ app.use((req, _res, next) => {
   const startedAt = Date.now();
   console.log(
     `[API] ${req.method} ${req.originalUrl} received at ${new Date(
-      startedAt
-    ).toISOString()}`
+      startedAt,
+    ).toISOString()}`,
   );
   next();
 });

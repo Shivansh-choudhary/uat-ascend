@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import type { SubmitEvent } from 'react'
 import { useEffect, useMemo, useRef, useState } from 'react'
+import type { SubmitEvent } from 'react'
 import {
   answerOptions,
   categories,
@@ -10,22 +10,19 @@ import {
 } from '#/lib/assessment'
 import { Button } from '#/components/ui/button'
 import { Badge } from '#/components/ui/badge'
-import {
-  createEmptyUserData,
-  type UserData,
-  useAssessmentStore,
-} from '#/store/assessment-store'
+import { createEmptyUserData, useAssessmentStore } from '#/store/assessment-store'
+import type { UserData } from '#/store/assessment-store'
 import {
   getActiveMicrosoftAccount,
   isMsalConfigured,
   logoutMicrosoft,
   toUserData,
 } from '#/lib/msal-auth'
-import { Input } from '#/components/ui/input'
-import { Label } from '#/components/ui/label'
 import { Progress } from '#/components/ui/progress'
 import { cn } from '#/lib/utils'
 import { Separator } from '#/components/ui/separator'
+import { EmployeeDetailsForm } from '#/components/EmployeeDetailsForm'
+import { AuthHeroPanel } from '#/components/AuthHeroPanel'
 
 export const Route = createFileRoute('/')({ component: App })
 
@@ -100,23 +97,6 @@ const DEFAULT_API_BASE_URL =
 
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL
 
-const ENTITY_OPTIONS = [
-  'Beauty',
-  'Construction',
-  'PMC',
-  'Sobha Community Management',
-  'LFM',
-  'Sobha Concrete',
-  'Lanfam Landscaping',
-  'Advanced Manufacturing',
-  'Sobha Modular & Facade',
-  'Sobha Energy Solutions',
-  'Sobha Realty Abu Dhabi',
-  'Al Siniya',
-  'Furniture',
-  'Stay By Latinem',
-  'Other',
-] as const
 
 const ASSESSMENT_DURATION_SECONDS = 7 * 60
 
@@ -134,16 +114,6 @@ const surveyBackgroundStyle = {
   backgroundPosition: 'left center',
   backgroundRepeat: 'no-repeat',
   backgroundSize: 'cover',
-}
-
-function buildAuthPanelStyle() {
-  return {
-    backgroundImage:
-      "linear-gradient(rgba(33, 27, 30, 0.74), rgba(33, 27, 30, 0.74)), url('/talent_background.PNG')",
-    backgroundPosition: 'center',
-    backgroundRepeat: 'no-repeat',
-    backgroundSize: 'cover',
-  }
 }
 
 function normalizeUserData(value: UserData, otherEntity: string): UserData {
@@ -215,6 +185,7 @@ function App() {
     signOut,
   } = useAssessmentStore()
   const [showProfileForm, setShowProfileForm] = useState(false)
+  const [showInstructions, setShowInstructions] = useState(false)
   const [profileForm, setProfileForm] = useState<UserData>(() => createEmptyUserData())
   const [profileErrors, setProfileErrors] = useState<ProfileErrors>({})
   const [otherEntity, setOtherEntity] = useState('')
@@ -310,6 +281,14 @@ function App() {
     }
   }
 
+  const handleOtherEntityChange = (value: string) => {
+    setOtherEntity(value)
+    setProfileErrors((current) => ({
+      ...current,
+      otherEntity: undefined,
+    }))
+  }
+
   const resetProfileForm = () => {
     setProfileForm(createEmptyUserData())
     setProfileErrors({})
@@ -331,11 +310,17 @@ function App() {
     }
 
     signIn(normalizeUserData(profileForm, otherEntity))
+    setShowInstructions(true)
+    setShowProfileForm(false)
+    setSubmitPhase('idle')
+    autoSubmitStartedRef.current = false
+  }
+
+  const handleStartSurvey = () => {
+    setShowInstructions(false)
     resetAssessment()
     setRemainingSeconds(ASSESSMENT_DURATION_SECONDS)
     setTimerRunId((v) => v + 1)
-    setSubmitPhase('idle')
-    autoSubmitStartedRef.current = false
   }
 
   const handleSignOut = async () => {
@@ -348,6 +333,7 @@ function App() {
       signOut()
       resetProfileForm()
       setShowProfileForm(false)
+      setShowInstructions(false)
       setSubmitPhase('idle')
       autoSubmitStartedRef.current = false
     }
@@ -399,7 +385,7 @@ function App() {
   }, [timerRunId])
 
   useEffect(() => {
-    if (!isLoggedIn || !userData.email) {
+    if (!isLoggedIn || !userData.email || showInstructions) {
       setHasCompletedAssessment(false)
       setSubmitPhase('idle')
       autoSubmitStartedRef.current = false
@@ -455,7 +441,7 @@ function App() {
   }, [isLoggedIn, userData.email])
 
   useEffect(() => {
-    if (isCheckingCompletion || hasCompletedAssessment) {
+    if (isCheckingCompletion || hasCompletedAssessment || showInstructions) {
       return
     }
     if (!isCompleted && !isTimeUp) {
@@ -505,27 +491,15 @@ function App() {
       {!isLoggedIn && !showProfileForm ? (
         <div className="min-h-[calc(100vh-72px)] bg-white lg:grid lg:grid-cols-[1.15fr_0.85fr]">
           <div className="contents lg:contents">
-            <section
-              className="relative flex min-h-[280px] items-end px-6 py-8 text-white sm:px-10 sm:py-10 lg:min-h-[calc(100vh-72px)] lg:px-12 lg:py-12 xl:px-16"
-              style={buildAuthPanelStyle()}
-            >
-              <div className="max-w-md">
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-white/75">
-                  Sobha Ascend
-                </p>
-                <h1 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Welcome to the High Potential Assessment Questionnaire
-                </h1>
-                <p className="mt-4 text-sm leading-6 text-white/80 sm:text-base">
-                  Start with sign in, complete your employee details, and continue to
-                  the survey experience.
-                </p>
-              </div>
-            </section>
+            <AuthHeroPanel
+              title="Welcome to the High Potential Assessment Questionnaire"
+            />
 
             <section className="flex items-center justify-center bg-white px-5 py-10 sm:px-8 lg:min-h-[calc(100vh-72px)] lg:px-12 xl:px-16">
               <div className="w-full max-w-md">
+                <img src="/logo-sobha.png" alt="Sobha Ascend Logo" className="mb-4  mx-auto h-16 w-16 object-contain" />
                 <div className="text-center">
+
                   <p className="text-xs font-semibold uppercase tracking-[0.26em] text-muted-foreground">
                     Sobha Ascend
                   </p>
@@ -545,197 +519,72 @@ function App() {
       ) : null}
 
       {!isLoggedIn && showProfileForm ? (
+        <EmployeeDetailsForm
+          profileForm={profileForm}
+          profileErrors={profileErrors}
+          otherEntity={otherEntity}
+          onUpdateField={updateProfileField}
+          onOtherEntityChange={handleOtherEntityChange}
+          onSubmit={handleProfileSubmit}
+          onBack={() => {
+            resetProfileForm()
+            setShowProfileForm(false)
+          }}
+        />
+      ) : null}
+
+      {isLoggedIn && showInstructions ? (
         <div className="min-h-[calc(100vh-72px)] bg-white lg:grid lg:grid-cols-[1.15fr_0.85fr]">
           <div className="contents lg:contents">
-            <section
-              className="relative flex min-h-[280px] items-end px-6 py-8 text-white sm:px-10 sm:py-10 lg:min-h-[calc(100vh-72px)] lg:px-12 lg:py-12 xl:px-16"
-              style={buildAuthPanelStyle()}
-            >
-              <div className="max-w-md">
-                <p className="text-sm font-semibold uppercase tracking-[0.22em] text-white/75">
-                  Sobha Ascend
-                </p>
-                <h2 className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
-                  Welcome to the High Potential Assessment Questionnaire
-                </h2>
-                <p className="mt-4 text-sm leading-6 text-white/80 sm:text-base">
-                  Complete the required employee details to continue into the survey.
-                </p>
-              </div>
-            </section>
+            <AuthHeroPanel
+              title="High Potential Assessment Questionnaire"
+            />
 
-            <section className="flex items-center justify-center bg-white px-5 py-10 sm:px-8 lg:min-h-[calc(100vh-72px)] lg:px-10 xl:px-14">
+            <section className="flex items-center justify-center bg-white px-5 py-10 sm:px-8 lg:min-h-[calc(100vh-72px)] lg:px-12 xl:px-16">
               <div className="w-full max-w-2xl">
-                <p className="text-xs font-semibold uppercase tracking-[0.26em] text-muted-foreground">
-                  Sobha Ascend
-                </p>
-                <h3 className="mt-3 text-3xl font-semibold tracking-tight">
-                  Employee Details
-                </h3>
-                <p className="mt-3 text-sm text-muted-foreground">
-                  Fill in all mandatory details before you move to the survey.
-                </p>
+                <div className=" mb-8">
+                  <p className="text-xs font-semibold uppercase tracking-[0.26em] text-muted-foreground">
+                    Sobha Ascend
+                  </p>
+                  <h2 className="mt-3 text-3xl font-semibold tracking-tight">Instructions</h2>
+                  <p className="mt-3 text-sm text-muted-foreground">
+                    Please read the following instructions carefully before starting the assessment:
+                  </p>
+                </div>
 
-                <form className="mt-8 space-y-6" onSubmit={handleProfileSubmit}>
-                  <div className="grid gap-5 md:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="employeeCode">Employee Code *</Label>
-                      <Input
-                        id="employeeCode"
-                        value={profileForm.employeeCode}
-                        onChange={(event) =>
-                          updateProfileField('employeeCode', event.target.value)
-                        }
-                        aria-invalid={Boolean(profileErrors.employeeCode)}
-                        placeholder="eg. 123456"
-                      />
-                      {profileErrors.employeeCode ? (
-                        <p className="text-sm text-destructive">
-                          {profileErrors.employeeCode}
-                        </p>
-                      ) : null}
-                    </div>
+                <div className="space-y-6 text-left">
+                  <div className="rounded-lg border border-border bg-card/50 p-6">
+                    <ul className="space-y-4 text-sm leading-6">
+                      <li className="flex items-start gap-3">
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
+                        <span>The assessment consists of <strong>40 questions</strong>. Ensure that you attempt and complete all questions.</span>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
+                        <span>This is a timed assessment with a total duration of <strong>7 minutes</strong>. The assessment is designed to be quick and can typically be completed within 2 minutes if done in one sitting.</span>
+                      </li>
+                      <li className="flex items-start gap-3">
+                        <span className="mt-1.5 h-1.5 w-1.5 shrink-0 rounded-full bg-primary"></span>
+                        <span>If needed, click "Save and Sign Out" Button to save your progress and exit. You can resume later by signing in again.</span>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="email">Email Address *</Label>
-                      <Input
-                        id="email"
-                        type="email"
-                        value={profileForm.email}
-                        onChange={(event) =>
-                          updateProfileField('email', event.target.value)
-                        }
-                        aria-invalid={Boolean(profileErrors.email)}
-                        placeholder="eg. john.doe@example.com"
-                      />
-                      {profileErrors.email ? (
-                        <p className="text-sm text-destructive">{profileErrors.email}</p>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="name">Employee Name *</Label>
-                      <Input
-                        id="name"
-                        value={profileForm.name}
-                        onChange={(event) => updateProfileField('name', event.target.value)}
-                        aria-invalid={Boolean(profileErrors.name)}
-                        placeholder="eg. John Ternus"
-                      />
-                      {profileErrors.name ? (
-                        <p className="text-sm text-destructive">{profileErrors.name}</p>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="designation">Designation *</Label>
-                      <Input
-                        id="designation"
-                        value={profileForm.Designation}
-                        onChange={(event) =>
-                          updateProfileField('Designation', event.target.value)
-                        }
-                        aria-invalid={Boolean(profileErrors.Designation)}
-                        placeholder="eg. Senior Software Engineer"
-                      />
-                      {profileErrors.Designation ? (
-                        <p className="text-sm text-destructive">
-                          {profileErrors.Designation}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="department">Department *</Label>
-                      <Input
-                        id="department"
-                        value={profileForm.Department}
-                        onChange={(event) =>
-                          updateProfileField('Department', event.target.value)
-                        }
-                        aria-invalid={Boolean(profileErrors.Department)}
-                        placeholder="eg. Engineering"
-                      />
-                      {profileErrors.Department ? (
-                        <p className="text-sm text-destructive">
-                          {profileErrors.Department}
-                        </p>
-                      ) : null}
-                    </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="entity">Entity *</Label>
-                      <select
-                        id="entity"
-                        value={profileForm.entity}
-                        onChange={(event) => updateProfileField('entity', event.target.value)}
-                        aria-invalid={Boolean(profileErrors.entity)}
-                        className={cn(
-                          'h-10 w-full rounded-md border border-input bg-white px-3 py-2 text-sm shadow-xs outline-none transition-[color,box-shadow] focus-visible:border-ring focus-visible:ring-[3px] focus-visible:ring-ring/50',
-                          profileErrors.entity
-                            ? 'border-destructive ring-destructive/20'
-                            : undefined,
-                        )}
-                      >
-                        <option value="">Select entity</option>
-                        {ENTITY_OPTIONS.map((option) => (
-                          <option key={option} value={option}>
-                            {option}
-                          </option>
-                        ))}
-                      </select>
-                      {profileErrors.entity ? (
-                        <p className="text-sm text-destructive">{profileErrors.entity}</p>
-                      ) : null}
-                    </div>
-
-                    {profileForm.entity === 'Other' ? (
-                      <div className="space-y-2 md:col-span-2">
-                        <Label htmlFor="otherEntity">Other Entity *</Label>
-                        <Input
-                          id="otherEntity"
-                          value={otherEntity}
-                          onChange={(event) => {
-                            setOtherEntity(event.target.value)
-                            setProfileErrors((current) => ({
-                              ...current,
-                              otherEntity: undefined,
-                            }))
-                          }}
-                          aria-invalid={Boolean(profileErrors.otherEntity)}
-                          placeholder="eg. Sobha Realty"
-                        />
-                        {profileErrors.otherEntity ? (
-                          <p className="text-sm text-destructive">
-                            {profileErrors.otherEntity}
-                          </p>
-                        ) : null}
-                      </div>
-                    ) : null}
+                      </li>
+                    </ul>
                   </div>
+                </div>
 
-                  <div className="flex flex-wrap justify-end gap-3">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => {
-                        resetProfileForm()
-                        setShowProfileForm(false)
-                      }}
-                    >
-                      Back
-                    </Button>
-                    <Button type="submit">Next</Button>
-                  </div>
-                </form>
+                <div className="mt-8 text-center">
+                  <Button className="w-full sm:w-auto" size="lg" onClick={handleStartSurvey}>
+                    Start Survey
+                  </Button>
+                </div>
               </div>
             </section>
           </div>
         </div>
       ) : null}
 
-      {isLoggedIn ? (
-        <main className="mx-auto w-full max-w-[1200px] p-4 sm:p-6">
+      {isLoggedIn && !showInstructions ? (
+        <main className="mx-auto w-full max-w-[1200px] p-3 sm:p-4 md:p-6">
           {isCheckingCompletion ? (
             <section className="rounded-xl bg-card/78 p-6 backdrop-blur-sm">
               <p className="text-sm text-muted-foreground">
@@ -783,15 +632,19 @@ function App() {
             !hasCompletedAssessment &&
             !isFinalMessageVisible ? (
             <>
-              <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-white/62 p-4 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h1 className="text-2xl font-semibold">Hi, {userData.name}</h1>
-                  <div className="mt-2 flex flex-wrap items-center gap-2">
-                    <Badge variant="secondary">Designation: {userData.Designation}</Badge>
-                    <Badge variant="outline">Department: {userData.Department}</Badge>
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-white/62 p-3 backdrop-blur-sm sm:p-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0">
+                  <h1 className="text-xl font-semibold sm:text-2xl">Hi, {userData.name}</h1>
+                  <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+                    <Badge className="w-fit max-w-full truncate" variant="secondary">
+                      Designation: {userData.Designation}
+                    </Badge>
+                    <Badge className="w-fit max-w-full truncate" variant="outline">
+                      Department: {userData.Department}
+                    </Badge>
                   </div>
                 </div>
-                <div className="rounded-xl border border-border/80 bg-white/80 px-4 py-2 text-center shadow-xs sm:text-right">
+                <div className="shrink-0 rounded-xl border border-border/80 bg-white/80 px-4 py-2 text-center shadow-xs sm:text-right">
                   <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
                     Time Left
                   </p>
@@ -799,7 +652,7 @@ function App() {
                 </div>
               </div>
 
-              <section className="w-full rounded-xl bg-card/78 p-4 backdrop-blur-sm">
+              <section className="w-full rounded-xl bg-card/78 p-3 backdrop-blur-sm sm:p-4">
                 <div className="mb-2">
                   <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                     Self Assessment
@@ -851,36 +704,44 @@ function App() {
                     </p>
                   </div>
                 ) : (
-                  <div className="w-full rounded-md border border-default bg-card/82 p-3 shadow-xs backdrop-blur-sm">
+                  <div className="w-full rounded-md border border-default bg-card/82 p-3 shadow-xs backdrop-blur-sm sm:p-4">
 
-                    <div className="mt-3 space-y-5">
+                    <div className="mt-1 space-y-6 sm:mt-3 sm:space-y-5">
                       {visibleQuestions.map((question) => {
                         const currentAnswer = answersArray[question.id - 1]
                         return (
-                          <div key={question.id}>
-                            <div className="flex justify-between items-center">
-                              <div className="flex flex-col max-w-[500px]">
-                                <p className="text-base font-semibold text-muted-foreground">Question {question.id}</p>
-                                <h2 className="m-0 text-base font-semibold">{question.prompt}</h2>
+                          <div key={question.id} className="space-y-3">
+                            <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between lg:gap-6">
+                              <div className="min-w-0 flex-1 lg:max-w-[min(100%,32rem)] xl:max-w-[500px]">
+                                <p className="text-sm font-semibold text-muted-foreground sm:text-base">
+                                  Question {question.id}
+                                </p>
+                                <h2 className="mt-1 text-base font-semibold leading-snug sm:text-base">
+                                  {question.prompt}
+                                </h2>
                               </div>
-                              <div className="mt-2 flex h-24 flex-wrap gap-4">
+                              <div
+                                className="grid w-full shrink-0 grid-cols-1 gap-2 sm:grid-cols-2 lg:flex lg:w-auto lg:flex-wrap lg:justify-end lg:gap-3"
+                                role="group"
+                                aria-label={`Answer choices for question ${question.id}`}
+                              >
                                 {answerOptions.map((option) => {
                                   const active = currentAnswer === option.value
                                   return (
-                                    <div key={`${question.id}-${option.value}`} className="relative h-20 w-20">
-                                      <button
-                                        onClick={() => setAnswerForQuestion(question.id, option.value)}
-                                        disabled={isTimeUp}
-                                        className={cn(
-                                          'absolute top-0 left-0 h-20 w-20 rounded-lg border-2 px-1 text-center text-sm font-medium transition-all duration-300 ease-out flex items-center justify-center',
-                                          active
-                                            ? 'border-primary bg-primary text-primary-foreground'
-                                            : 'border-border bg-card text-card-foreground hover:border-primary hover:bg-primary/5',
-                                        )}
-                                      >
-                                        {option.label}
-                                      </button>
-                                    </div>
+                                    <button
+                                      key={`${question.id}-${option.value}`}
+                                      type="button"
+                                      onClick={() => setAnswerForQuestion(question.id, option.value)}
+                                      disabled={isTimeUp}
+                                      className={cn(
+                                        'min-h-11 w-full rounded-lg border-2 px-3 py-2.5 text-left text-sm font-medium leading-tight transition-all duration-200 ease-out sm:min-h-12 lg:h-20 lg:w-20 lg:px-1 lg:py-0 lg:text-center',
+                                        active
+                                          ? 'border-primary bg-primary text-primary-foreground'
+                                          : 'border-border bg-card text-card-foreground active:bg-primary/10 lg:hover:border-primary lg:hover:bg-primary/5',
+                                      )}
+                                    >
+                                      {option.label}
+                                    </button>
                                   )
                                 })}
                               </div>
@@ -892,8 +753,8 @@ function App() {
                       })}
                     </div>
 
-                    <div className="mt-4 flex justify-end">
-                      <Button onClick={nextQuestion} disabled={!canGoNext}>
+                    <div className="mt-4 flex justify-stretch sm:justify-end">
+                      <Button className="w-full sm:w-auto" onClick={nextQuestion} disabled={!canGoNext}>
                         Next
                       </Button>
                     </div>
