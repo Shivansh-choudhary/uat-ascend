@@ -1,5 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router'
-import { type FormEvent, useEffect, useMemo, useRef, useState } from 'react'
+import type { SubmitEvent } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   answerOptions,
   categories,
@@ -320,7 +321,7 @@ function App() {
     setShowProfileForm(true)
   }
 
-  const handleProfileSubmit = (event: FormEvent<HTMLFormElement>) => {
+  const handleProfileSubmit = (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     const errors = validateUserData(profileForm, otherEntity)
@@ -586,7 +587,7 @@ function App() {
                           updateProfileField('employeeCode', event.target.value)
                         }
                         aria-invalid={Boolean(profileErrors.employeeCode)}
-                        placeholder="Enter employee code"
+                        placeholder="eg. 123456"
                       />
                       {profileErrors.employeeCode ? (
                         <p className="text-sm text-destructive">
@@ -605,7 +606,7 @@ function App() {
                           updateProfileField('email', event.target.value)
                         }
                         aria-invalid={Boolean(profileErrors.email)}
-                        placeholder="Enter email address"
+                        placeholder="eg. john.doe@example.com"
                       />
                       {profileErrors.email ? (
                         <p className="text-sm text-destructive">{profileErrors.email}</p>
@@ -619,7 +620,7 @@ function App() {
                         value={profileForm.name}
                         onChange={(event) => updateProfileField('name', event.target.value)}
                         aria-invalid={Boolean(profileErrors.name)}
-                        placeholder="Enter employee name"
+                        placeholder="eg. John Ternus"
                       />
                       {profileErrors.name ? (
                         <p className="text-sm text-destructive">{profileErrors.name}</p>
@@ -635,7 +636,7 @@ function App() {
                           updateProfileField('Designation', event.target.value)
                         }
                         aria-invalid={Boolean(profileErrors.Designation)}
-                        placeholder="Enter designation"
+                        placeholder="eg. Senior Software Engineer"
                       />
                       {profileErrors.Designation ? (
                         <p className="text-sm text-destructive">
@@ -653,7 +654,7 @@ function App() {
                           updateProfileField('Department', event.target.value)
                         }
                         aria-invalid={Boolean(profileErrors.Department)}
-                        placeholder="Enter department"
+                        placeholder="eg. Engineering"
                       />
                       {profileErrors.Department ? (
                         <p className="text-sm text-destructive">
@@ -702,7 +703,7 @@ function App() {
                             }))
                           }}
                           aria-invalid={Boolean(profileErrors.otherEntity)}
-                          placeholder="Enter entity name"
+                          placeholder="eg. Sobha Realty"
                         />
                         {profileErrors.otherEntity ? (
                           <p className="text-sm text-destructive">
@@ -756,8 +757,8 @@ function App() {
           ) : null}
 
           {!isCheckingCompletion &&
-          !hasCompletedAssessment &&
-          isFinalMessageVisible ? (
+            !hasCompletedAssessment &&
+            isFinalMessageVisible ? (
             <section className="animate-in fade-in zoom-in-95 duration-500 rounded-xl border border-default bg-card/78 p-8 shadow-xs backdrop-blur-sm">
               <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
                 {submitPhase === 'timed_out' ? 'Time is up' : 'Thank you'}
@@ -779,126 +780,126 @@ function App() {
           ) : null}
 
           {!isCheckingCompletion &&
-          !hasCompletedAssessment &&
-          !isFinalMessageVisible ? (
+            !hasCompletedAssessment &&
+            !isFinalMessageVisible ? (
             <>
-          <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-white/62 p-4 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between">
-            <div>
-              <h1 className="text-2xl font-semibold">Hi, {userData.name}</h1>
-              <div className="mt-2 flex flex-wrap items-center gap-2">
-                <Badge variant="secondary">Designation: {userData.Designation}</Badge>
-                <Badge variant="outline">Department: {userData.Department}</Badge>
+              <div className="mb-4 flex flex-col gap-3 rounded-2xl bg-white/62 p-4 backdrop-blur-sm sm:flex-row sm:items-start sm:justify-between">
+                <div>
+                  <h1 className="text-2xl font-semibold">Hi, {userData.name}</h1>
+                  <div className="mt-2 flex flex-wrap items-center gap-2">
+                    <Badge variant="secondary">Designation: {userData.Designation}</Badge>
+                    <Badge variant="outline">Department: {userData.Department}</Badge>
+                  </div>
+                </div>
+                <div className="rounded-xl border border-border/80 bg-white/80 px-4 py-2 text-center shadow-xs sm:text-right">
+                  <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
+                    Time Left
+                  </p>
+                  <p className="mt-1 text-2xl font-semibold tabular-nums">{countdownLabel}</p>
+                </div>
               </div>
-            </div>
-            <div className="rounded-xl border border-border/80 bg-white/80 px-4 py-2 text-center shadow-xs sm:text-right">
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-muted-foreground">
-                Time Left
-              </p>
-              <p className="mt-1 text-2xl font-semibold tabular-nums">{countdownLabel}</p>
-            </div>
-          </div>
 
-          <section className="w-full rounded-xl bg-card/78 p-4 backdrop-blur-sm">
-            <div className="mb-2">
-              <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-                Self Assessment
-              </p>
-              <h1 className="m-0 text-base font-semibold">40 Questions</h1>
-              <div className="mt-2">
-                <Progress value={completionPercent} />
-                <p className="mt-1 text-xs text-muted-foreground">
-                  {answeredCount}/{questions.length} complete ({completionPercent}%)
-                </p>
-              </div>
-            </div>
+              <section className="w-full rounded-xl bg-card/78 p-4 backdrop-blur-sm">
+                <div className="mb-2">
+                  <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
+                    Self Assessment
+                  </p>
+                  <h1 className="m-0 text-base font-semibold">40 Questions</h1>
+                  <div className="mt-2">
+                    <Progress value={completionPercent} />
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {answeredCount}/{questions.length} complete ({completionPercent}%)
+                    </p>
+                  </div>
+                </div>
 
-            {submitPhase === 'error' ? (
-              <div className="w-full rounded-md border border-destructive/50 bg-card/82 p-6 backdrop-blur-sm">
-                <p className="font-medium text-destructive">
-                  We could not save your responses.
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Check your connection and try again.
-                </p>
-                <Button
-                  className="mt-4"
-                  onClick={() => {
-                    setSubmitPhase('submitting')
-                    void (async () => {
-                      const ok = await saveResultsToDatabase(buildResultPayload())
-                      if (ok) {
-                        setSubmitPhase(getCompletionSubmitPhase(isCompleted))
-                        autoSubmitStartedRef.current = true
-                      } else {
-                        setSubmitPhase('error')
-                      }
-                    })()
-                  }}
-                >
-                  Try again
-                </Button>
-              </div>
-            ) : submitPhase === 'submitting' ? (
-              <div className="w-full rounded-md border border-default bg-card/82 p-8 text-center backdrop-blur-sm">
-                <p className="text-base font-medium">
-                  {isTimeUp && !isCompleted
-                    ? 'Time is up. Saving your responses…'
-                    : 'Saving your responses…'}
-                </p>
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Please wait a moment.
-                </p>
-              </div>
-            ) : (
-              <div className="w-full rounded-md border border-default bg-card/82 p-3 shadow-xs backdrop-blur-sm">
+                {submitPhase === 'error' ? (
+                  <div className="w-full rounded-md border border-destructive/50 bg-card/82 p-6 backdrop-blur-sm">
+                    <p className="font-medium text-destructive">
+                      We could not save your responses.
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Check your connection and try again.
+                    </p>
+                    <Button
+                      className="mt-4"
+                      onClick={() => {
+                        setSubmitPhase('submitting')
+                        void (async () => {
+                          const ok = await saveResultsToDatabase(buildResultPayload())
+                          if (ok) {
+                            setSubmitPhase(getCompletionSubmitPhase(isCompleted))
+                            autoSubmitStartedRef.current = true
+                          } else {
+                            setSubmitPhase('error')
+                          }
+                        })()
+                      }}
+                    >
+                      Try again
+                    </Button>
+                  </div>
+                ) : submitPhase === 'submitting' ? (
+                  <div className="w-full rounded-md border border-default bg-card/82 p-8 text-center backdrop-blur-sm">
+                    <p className="text-base font-medium">
+                      {isTimeUp && !isCompleted
+                        ? 'Time is up. Saving your responses…'
+                        : 'Saving your responses…'}
+                    </p>
+                    <p className="mt-2 text-sm text-muted-foreground">
+                      Please wait a moment.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="w-full rounded-md border border-default bg-card/82 p-3 shadow-xs backdrop-blur-sm">
 
-                <div className="mt-3 space-y-5">
-                  {visibleQuestions.map((question) => {
-                    const currentAnswer = answersArray[question.id - 1]
-                    return (
-                        <div key={question.id}>
-                          <div className="flex justify-between items-center">
-                            <div className="flex flex-col max-w-[500px]">
-                              <p className="text-base font-semibold text-muted-foreground">Question {question.id}</p>
-                              <h2 className="m-0 text-base font-semibold">{question.prompt}</h2>
+                    <div className="mt-3 space-y-5">
+                      {visibleQuestions.map((question) => {
+                        const currentAnswer = answersArray[question.id - 1]
+                        return (
+                          <div key={question.id}>
+                            <div className="flex justify-between items-center">
+                              <div className="flex flex-col max-w-[500px]">
+                                <p className="text-base font-semibold text-muted-foreground">Question {question.id}</p>
+                                <h2 className="m-0 text-base font-semibold">{question.prompt}</h2>
+                              </div>
+                              <div className="mt-2 flex h-24 flex-wrap gap-4">
+                                {answerOptions.map((option) => {
+                                  const active = currentAnswer === option.value
+                                  return (
+                                    <div key={`${question.id}-${option.value}`} className="relative h-20 w-20">
+                                      <button
+                                        onClick={() => setAnswerForQuestion(question.id, option.value)}
+                                        disabled={isTimeUp}
+                                        className={cn(
+                                          'absolute top-0 left-0 h-20 w-20 rounded-lg border-2 px-1 text-center text-sm font-medium transition-all duration-300 ease-out flex items-center justify-center',
+                                          active
+                                            ? 'border-primary bg-primary text-primary-foreground'
+                                            : 'border-border bg-card text-card-foreground hover:border-primary hover:bg-primary/5',
+                                        )}
+                                      >
+                                        {option.label}
+                                      </button>
+                                    </div>
+                                  )
+                                })}
+                              </div>
                             </div>
-                            <div className="mt-2 flex h-24 flex-wrap gap-4">
-                              {answerOptions.map((option) => {
-                                const active = currentAnswer === option.value
-                                return (
-                                  <div key={`${question.id}-${option.value}`} className="relative h-20 w-20">
-                                    <button
-                                      onClick={() => setAnswerForQuestion(question.id, option.value)}
-                                      disabled={isTimeUp}
-                                      className={cn(
-                                        'absolute top-0 left-0 h-20 w-20 rounded-lg border-2 px-1 text-center text-sm font-medium transition-all duration-300 ease-out flex items-center justify-center',
-                                        active
-                                          ? 'border-primary bg-primary text-primary-foreground'
-                                          : 'border-border bg-card text-card-foreground hover:border-primary hover:bg-primary/5',
-                                      )}
-                                    >
-                                      {option.label}
-                                    </button>
-                                  </div>
-                                )
-                              })}
-                            </div>
+
+                            <Separator />
                           </div>
+                        )
+                      })}
+                    </div>
 
-                          <Separator />
-                        </div>
-                    )
-                  })}
-                </div>
-
-                <div className="mt-4 flex justify-end">
-                  <Button onClick={nextQuestion} disabled={!canGoNext}>
-                    Next
-                  </Button>
-                </div>
-              </div>
-            )}
-          </section>
+                    <div className="mt-4 flex justify-end">
+                      <Button onClick={nextQuestion} disabled={!canGoNext}>
+                        Next
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </section>
             </>
           ) : null}
         </main>
