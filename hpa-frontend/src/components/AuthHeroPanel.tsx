@@ -7,7 +7,7 @@ interface AuthHeroPanelProps {
 function buildAuthPanelStyle(overlayOpacity: number) {
   return {
     backgroundImage: `linear-gradient(rgba(33, 27, 30, ${overlayOpacity}), rgba(33, 27, 30, ${overlayOpacity})), url('/talent_background.PNG')`,
-    backgroundPosition: 'center',
+    backgroundPosition: 'left center',
     backgroundRepeat: 'no-repeat',
     backgroundSize: 'cover',
   }
@@ -26,10 +26,10 @@ export function AuthHeroPanel({
       style={buildAuthPanelStyle(overlayOpacity)}
     >
       <div className="max-w-md">
-        <p className="text-md font-semibold uppercase tracking-[0.22em] text-red-800">
+        <p className="text-3xl font-semibold uppercase tracking-[0.22em] text-primary">
           Sobha Ascend
         </p>
-        <HeadingTag className="mt-3 text-3xl font-semibold tracking-tight sm:text-4xl">
+        <HeadingTag className="mt-3 text-2xl font-semibold tracking-tight sm:text-2xl">
           {title}
         </HeadingTag>
 

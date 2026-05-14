@@ -497,21 +497,23 @@ function App() {
 
             <section className="flex items-center justify-center bg-white px-5 py-10 sm:px-8 lg:min-h-[calc(100vh-72px)] lg:px-12 xl:px-16">
               <div className="w-full max-w-md">
-                <img src="/logo-sobha.png" alt="Sobha Ascend Logo" className="mb-4  mx-auto h-16 w-16 object-contain" />
+                <img src="/logo-sobha.png" alt="Sobha Ascend Logo" className="mb-4  mx-auto h-20 w-20 object-contain" />
                 <div className="text-center">
 
-                  <p className="text-xs font-semibold uppercase tracking-[0.26em] text-muted-foreground">
+                  <p className="text-2xl font-semibold uppercase tracking-[0.26em] text-muted-foreground">
                     Sobha Ascend
-                  </p>
-                  <h2 className="mt-3 text-3xl font-semibold tracking-tight">Sign in</h2>
-                  <p className="mt-3 text-sm text-muted-foreground">
-                    Use the button below to continue into the assessment flow.
                   </p>
                 </div>
 
-                <Button className="mt-8 w-full" size="lg" onClick={handleLogin}>
-                  Sign in to get started
+                <Button className="mt-8 w-full flex items-center justify-center gap-3" size="lg" onClick={handleLogin}>
+                  <img
+                    src="/microsoft.png"
+                    alt="Microsoft Logo"
+                    className="h-5 w-5 object-contain"
+                  />
+                  Sign in with Microsoft Single Sign-On
                 </Button>
+          
               </div>
             </section>
           </div>
