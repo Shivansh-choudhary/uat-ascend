@@ -1,26 +1,113 @@
 const express = require("express");
 const SurveyResponse = require("../models/SurveyResponse");
+const User = require("../models/User");
 
 const router = express.Router();
 
-router.post("/responses", async (req, res) => {
-  console.log("[Survey][POST] /responses payload summary:", {
-    userEmail: req.body?.userData?.email ?? null,
-    userName: req.body?.userData?.name ?? null,
-    answersCount: Array.isArray(req.body?.questionsAnswered)
-      ? req.body.questionsAnswered.length
-      : 0,
-    categoryCount: Array.isArray(req.body?.categoryResults?.categories)
-      ? req.body.categoryResults.categories.length
-      : 0
+router.post("/users/session", async (req, res) => {
+  const payload = req.body?.userData;
+  const email = typeof payload?.email === "string" ? payload.email.trim().toLowerCase() : "";
+
+  if (!email) {
+    return res.status(400).json({
+      message: "userData.email is required."
+    });
+  }
+
+  console.log("[Survey][POST] /users/session payload summary:", {
+    email,
+    name: payload?.name ?? null
   });
 
   try {
-    const savedResponse = await SurveyResponse.create(req.body);
+    const user = await User.findOneAndUpdate(
+      { email },
+      {
+        employeeCode: payload?.employeeCode,
+        name: payload?.name,
+        email,
+        Department: payload?.Department,
+        Designation: payload?.Designation,
+        entity: payload?.entity
+      },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true,
+        runValidators: true
+      }
+    );
+
+    const existingResponse = await SurveyResponse.findOne({ userId: user._id }).sort({
+      updatedAt: -1
+    });
+
+    return res.status(200).json({
+      message: "User session prepared.",
+      data: {
+        user,
+        response: existingResponse
+      }
+    });
+  } catch (error) {
+    console.error("[Survey][POST] /users/session failed:", {
+      error: error.message
+    });
+    return res.status(400).json({
+      message: "Failed to prepare user session.",
+      error: error.message
+    });
+  }
+});
+
+router.post("/responses", async (req, res) => {
+  const userId = req.body?.userId;
+  console.log("[Survey][POST] /responses payload summary:", {
+    userId: userId ?? null,
+    isCompleted: Boolean(req.body?.isCompleted),
+    answersCount: Array.isArray(req.body?.questionsAnswered) ? req.body.questionsAnswered.length : 0,
+    categoryCount: Array.isArray(req.body?.categoryResults?.categories) ? req.body.categoryResults.categories.length : 0
+  });
+
+  if (!userId) {
+    return res.status(400).json({
+      message: "userId is required."
+    });
+  }
+
+  try {
+    const savedResponse = await SurveyResponse.findOneAndUpdate(
+      { userId },
+      {
+        userId,
+        categoryResults: req.body?.categoryResults,
+        questionsAnswered: req.body?.questionsAnswered,
+        isCompleted: Boolean(req.body?.isCompleted),
+        submittedAt: new Date()
+      },
+      {
+        upsert: true,
+        new: true,
+        setDefaultsOnInsert: true,
+        runValidators: true
+      }
+    );
+
+    await User.findByIdAndUpdate(
+      userId,
+      {
+        hasCompletedQuestions: Boolean(req.body?.isCompleted)
+      },
+      {
+        runValidators: true
+      }
+    );
+
     console.log("[Survey][POST] /responses saved to DB:", {
       id: savedResponse._id?.toString?.() ?? null,
       createdAt: savedResponse.createdAt ?? null,
-      userEmail: savedResponse.userData?.email ?? null
+      userId: savedResponse.userId?.toString?.() ?? null,
+      isCompleted: savedResponse.isCompleted
     });
 
     return res.status(201).json({
@@ -57,7 +144,7 @@ router.post("/responses", async (req, res) => {
 
 router.get("/responses", async (_req, res) => {
   try {
-    const responses = await SurveyResponse.find().sort({ createdAt: -1 });
+    const responses = await SurveyResponse.find().sort({ createdAt: -1 }).populate("userId");
     console.log("[Survey][GET] /responses fetched from DB:", {
       total: responses.length
     });
@@ -83,13 +170,25 @@ router.get("/responses/status", async (req, res) => {
   }
 
   try {
+    const existingUser = await User.findOne({
+      email: email.toLowerCase()
+    }).select("_id email hasCompletedQuestions");
+
+    if (!existingUser) {
+      return res.status(200).json({
+        hasCompleted: false,
+        user: null,
+        latestSubmission: null
+      });
+    }
+
     const existingResponse = await SurveyResponse.findOne({
-      "userData.email": email.toLowerCase()
+      userId: existingUser._id
     })
       .sort({ createdAt: -1 })
-      .select("_id createdAt userData.email");
+      .select("_id createdAt userId isCompleted questionsAnswered");
 
-    const hasCompleted = Boolean(existingResponse);
+    const hasCompleted = Boolean(existingUser.hasCompletedQuestions);
     console.log("[Survey][GET] /responses/status checked:", {
       email: email.toLowerCase(),
       hasCompleted
@@ -97,11 +196,17 @@ router.get("/responses/status", async (req, res) => {
 
     return res.status(200).json({
       hasCompleted,
+      user: {
+        id: existingUser._id,
+        email: existingUser.email
+      },
       latestSubmission: existingResponse
         ? {
             id: existingResponse._id,
             createdAt: existingResponse.createdAt,
-            email: existingResponse.userData?.email ?? null
+            userId: existingResponse.userId ?? null,
+            isCompleted: existingResponse.isCompleted,
+            questionsAnswered: existingResponse.questionsAnswered ?? []
           }
         : null
     });

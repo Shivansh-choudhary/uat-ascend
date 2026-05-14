@@ -85,9 +85,13 @@ function calculateCategoryResults(
 }
 
 interface ResultData {
-  userData: UserData
+  userId: string
   categoryResults: CategoryResult
-  questionsAnswered: number[]
+  questionsAnswered: {
+    questionId: number
+    answer: number
+  }[]
+  isCompleted: boolean
 }
 
 const DEFAULT_API_BASE_URL =
@@ -99,6 +103,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL
 
 
 const ASSESSMENT_DURATION_SECONDS = 7 * 60
+const SECONDS_PER_QUESTION = ASSESSMENT_DURATION_SECONDS / questions.length
 
 type ProfileErrors = Partial<Record<keyof UserData | 'otherEntity', string>>
 type SubmitPhase =
@@ -172,6 +177,65 @@ function getCompletionSubmitPhase(isCompleted: boolean): SubmitPhase {
   return isCompleted ? 'completed' : 'timed_out'
 }
 
+function buildAnswersMapFromArray(answersArray: Array<number | undefined>) {
+  return answersArray.reduce<Record<number, number>>((acc, value, index) => {
+    if (value !== undefined) {
+      acc[index + 1] = value
+    }
+    return acc
+  }, {})
+}
+
+function buildAnsweredEntries(answersArray: Array<number | undefined>) {
+  return answersArray.flatMap((answer, index) =>
+    answer === undefined
+      ? []
+      : [
+          {
+            questionId: index + 1,
+            answer,
+          },
+        ],
+  )
+}
+
+function toAnswersArrayFromEntries(
+  entries: Array<{ questionId: number; answer: number }> | undefined,
+) {
+  const restoredAnswers: Array<1 | 2 | 3 | 4 | 5 | undefined> = Array.from(
+    { length: questions.length },
+    () => undefined,
+  )
+  if (!Array.isArray(entries)) {
+    return restoredAnswers
+  }
+
+  for (const entry of entries) {
+    if (
+      entry.questionId >= 1 &&
+      entry.questionId <= questions.length &&
+      (entry.answer === 1 ||
+        entry.answer === 2 ||
+        entry.answer === 3 ||
+        entry.answer === 4 ||
+        entry.answer === 5)
+    ) {
+      restoredAnswers[entry.questionId - 1] = entry.answer
+    }
+  }
+
+  return restoredAnswers
+}
+
+function calculateResumeDurationSeconds(answersArray: Array<number | undefined>) {
+  const answeredCount = answersArray.reduce<number>(
+    (count, answer) => (answer === undefined ? count : count + 1),
+    0,
+  )
+  const remainingQuestions = Math.max(questions.length - answeredCount, 0)
+  return Math.max(1, Math.ceil(remainingQuestions * SECONDS_PER_QUESTION))
+}
+
 function App() {
   const {
     currentQuestionId,
@@ -179,6 +243,7 @@ function App() {
     setAnswerForQuestion,
     nextQuestion,
     resetAssessment,
+    hydrateAnswers,
     isLoggedIn,
     userData,
     signIn,
@@ -190,9 +255,11 @@ function App() {
   const [profileErrors, setProfileErrors] = useState<ProfileErrors>({})
   const [otherEntity, setOtherEntity] = useState('')
   const [remainingSeconds, setRemainingSeconds] = useState(ASSESSMENT_DURATION_SECONDS)
+  const [isTimerActive, setIsTimerActive] = useState(false)
   const [timerRunId, setTimerRunId] = useState(0)
   const [isCheckingCompletion, setIsCheckingCompletion] = useState(false)
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState(false)
+  const [activeUserId, setActiveUserId] = useState('')
   /** This session only — after a successful POST from completing all questions */
   const [submitPhase, setSubmitPhase] = useState<SubmitPhase>('idle')
   const autoSubmitStartedRef = useRef(false)
@@ -208,23 +275,17 @@ function App() {
   const countdownLabel = formatCountdown(remainingSeconds)
   const isFinalMessageVisible =
     submitPhase === 'completed' || submitPhase === 'timed_out'
-  const buildResultPayload = (): ResultData => {
-    const answersMap = answersArray.reduce<Record<number, number>>(
-      (acc, value, index) => {
-        if (value !== undefined) {
-          acc[index + 1] = value
-        }
-        return acc
-      },
-      {},
-    )
+  const buildResultPayload = (isCompletedState: boolean): ResultData | null => {
+    if (!activeUserId) {
+      return null
+    }
+    const answersMap = buildAnswersMapFromArray(answersArray)
     const results = calculateCategoryResults(answersMap)
     return {
-      userData: userData,
+      userId: activeUserId,
       categoryResults: results,
-      questionsAnswered: answersArray.flatMap((answer) =>
-        answer === undefined ? [] : [answer],
-      ),
+      questionsAnswered: buildAnsweredEntries(answersArray),
+      isCompleted: isCompletedState,
     }
   }
 
@@ -300,7 +361,7 @@ function App() {
     setShowProfileForm(true)
   }
 
-  const handleProfileSubmit = (event: SubmitEvent<HTMLFormElement>) => {
+  const handleProfileSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
     event.preventDefault()
 
     const errors = validateUserData(profileForm, otherEntity)
@@ -309,17 +370,75 @@ function App() {
       return
     }
 
-    signIn(normalizeUserData(profileForm, otherEntity))
-    setShowInstructions(true)
-    setShowProfileForm(false)
-    setSubmitPhase('idle')
-    autoSubmitStartedRef.current = false
+    const normalizedUser = normalizeUserData(profileForm, otherEntity)
+    setIsCheckingCompletion(true)
+
+    try {
+      const endpoint = `${API_BASE_URL}/api/surveys/users/session`
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userData: normalizedUser,
+        }),
+      })
+      const body = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(`Failed to prepare user session. Status: ${response.status}`)
+      }
+
+      const backendUser = body?.data?.user
+      const backendResponse = body?.data?.response
+      const backendUserId: string = backendUser?._id ?? backendUser?.id ?? ''
+      if (!backendUserId) {
+        throw new Error('User ID was not returned by the backend.')
+      }
+
+      signIn(normalizedUser)
+      setActiveUserId(backendUserId)
+
+      const restoredAnswers = toAnswersArrayFromEntries(
+        backendResponse?.questionsAnswered,
+      )
+      const hasSavedProgress = restoredAnswers.some((answer) => answer !== undefined)
+      const completedFromBackend =
+        Boolean(backendUser?.hasCompletedQuestions) || Boolean(backendResponse?.isCompleted)
+
+      if (hasSavedProgress) {
+        hydrateAnswers(restoredAnswers)
+        setRemainingSeconds(calculateResumeDurationSeconds(restoredAnswers))
+        setIsTimerActive(!completedFromBackend)
+        setTimerRunId((v) => v + 1)
+      } else {
+        resetAssessment()
+        setRemainingSeconds(ASSESSMENT_DURATION_SECONDS)
+        setIsTimerActive(false)
+      }
+
+      setHasCompletedAssessment(completedFromBackend)
+      setShowInstructions(!hasSavedProgress && !completedFromBackend)
+      setShowProfileForm(false)
+      setSubmitPhase('idle')
+      autoSubmitStartedRef.current = false
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('[Survey][Frontend] Failed to prepare user session:', {
+        message: errorMessage,
+        raw: error,
+      })
+      setSubmitPhase('error')
+    } finally {
+      setIsCheckingCompletion(false)
+    }
   }
 
   const handleStartSurvey = () => {
     setShowInstructions(false)
     resetAssessment()
     setRemainingSeconds(ASSESSMENT_DURATION_SECONDS)
+    setIsTimerActive(true)
     setTimerRunId((v) => v + 1)
   }
 
@@ -330,6 +449,8 @@ function App() {
       console.error('[Auth] Microsoft logout failed:', error)
     } finally {
       resetAssessment()
+      setActiveUserId('')
+      setIsTimerActive(false)
       signOut()
       resetProfileForm()
       setShowProfileForm(false)
@@ -373,7 +494,10 @@ function App() {
   ])
 
   useEffect(() => {
-    const deadline = Date.now() + ASSESSMENT_DURATION_SECONDS * 1000
+    if (!isTimerActive) {
+      return
+    }
+    const deadline = Date.now() + remainingSeconds * 1000
     const timerId = window.setInterval(() => {
       const diff = Math.max(deadline - Date.now(), 0)
       setRemainingSeconds(Math.ceil(diff / 1000))
@@ -382,63 +506,7 @@ function App() {
     return () => {
       window.clearInterval(timerId)
     }
-  }, [timerRunId])
-
-  useEffect(() => {
-    if (!isLoggedIn || !userData.email || showInstructions) {
-      setHasCompletedAssessment(false)
-      setSubmitPhase('idle')
-      autoSubmitStartedRef.current = false
-      return
-    }
-
-    const checkCompletionStatus = async () => {
-      setIsCheckingCompletion(true)
-      const endpoint = `${API_BASE_URL}/api/surveys/responses/status?email=${encodeURIComponent(
-        userData.email,
-      )}`
-      console.log('[Survey][Frontend] Checking completion status:', {
-        endpoint,
-        email: userData.email,
-      })
-
-      try {
-        const response = await fetch(endpoint)
-        const body = await response.json().catch(() => null)
-        console.log('[Survey][Frontend] Completion status response:', {
-          status: response.status,
-          ok: response.ok,
-          body,
-        })
-
-        if (!response.ok) {
-          setHasCompletedAssessment(false)
-          setSubmitPhase('idle')
-          return
-        }
-
-        setHasCompletedAssessment(Boolean(body?.hasCompleted))
-        if (!body?.hasCompleted) {
-          setSubmitPhase('idle')
-          autoSubmitStartedRef.current = false
-        }
-      } catch (error) {
-        const errorMessage =
-          error instanceof Error ? error.message : 'Unknown error'
-        console.error('[Survey][Frontend] Failed completion check:', {
-          message: errorMessage,
-          raw: error,
-        })
-        setHasCompletedAssessment(false)
-        setSubmitPhase('idle')
-        autoSubmitStartedRef.current = false
-      } finally {
-        setIsCheckingCompletion(false)
-      }
-    }
-
-    void checkCompletionStatus()
-  }, [isLoggedIn, userData.email])
+  }, [isTimerActive, timerRunId])
 
   useEffect(() => {
     if (isCheckingCompletion || hasCompletedAssessment || showInstructions) {
@@ -454,16 +522,25 @@ function App() {
     setSubmitPhase('submitting')
 
     const run = async () => {
-      const resultData = buildResultPayload()
+      const resultData = buildResultPayload(isCompleted)
+      if (!resultData) {
+        setSubmitPhase('error')
+        autoSubmitStartedRef.current = false
+        return
+      }
       console.log('[Survey][Frontend] Auto-submit prepared payload:', {
         apiBaseUrl: API_BASE_URL,
-        userEmail: resultData.userData.email,
+        userId: resultData.userId,
         answersCount: resultData.questionsAnswered.length,
         letterGrade: resultData.categoryResults.letterGrade,
         timedOut: isTimeUp && !isCompleted,
       })
       const ok = await saveResultsToDatabase(resultData)
       if (ok) {
+        setIsTimerActive(false)
+        if (isCompleted) {
+          setHasCompletedAssessment(true)
+        }
         setSubmitPhase(getCompletionSubmitPhase(isCompleted))
       } else {
         setSubmitPhase('error')
@@ -473,6 +550,26 @@ function App() {
 
     void run()
   }, [isCheckingCompletion, hasCompletedAssessment, isCompleted, isTimeUp])
+
+  const handleSaveAndSignOut = async () => {
+    const resultData = buildResultPayload(false)
+    if (!resultData) {
+      setSubmitPhase('error')
+      return
+    }
+
+    setSubmitPhase('submitting')
+    autoSubmitStartedRef.current = true
+    const ok = await saveResultsToDatabase(resultData)
+    if (!ok) {
+      setSubmitPhase('error')
+      autoSubmitStartedRef.current = false
+      return
+    }
+    setSubmitPhase('idle')
+    autoSubmitStartedRef.current = false
+    await handleSignOut()
+  }
 
   const canGoNext = useMemo(() => {
     if (isTimeUp) {
@@ -681,7 +778,13 @@ function App() {
                       onClick={() => {
                         setSubmitPhase('submitting')
                         void (async () => {
-                          const ok = await saveResultsToDatabase(buildResultPayload())
+                          const resultData = buildResultPayload(isCompleted)
+                          if (!resultData) {
+                            setSubmitPhase('error')
+                            autoSubmitStartedRef.current = false
+                            return
+                          }
+                          const ok = await saveResultsToDatabase(resultData)
                           if (ok) {
                             setSubmitPhase(getCompletionSubmitPhase(isCompleted))
                             autoSubmitStartedRef.current = true
@@ -755,7 +858,15 @@ function App() {
                       })}
                     </div>
 
-                    <div className="mt-4 flex justify-stretch sm:justify-end">
+                    <div className="mt-4 flex flex-col gap-2 sm:flex-row sm:justify-end">
+                      <Button
+                        className="w-full sm:w-auto"
+                        variant="outline"
+                        onClick={() => void handleSaveAndSignOut()}
+                        disabled={isTimeUp}
+                      >
+                        Save and Sign Out
+                      </Button>
                       <Button className="w-full sm:w-auto" onClick={nextQuestion} disabled={!canGoNext}>
                         Next
                       </Button>

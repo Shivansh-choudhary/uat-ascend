@@ -30,6 +30,7 @@ type AssessmentState = {
   setAnswerForQuestion: (questionId: number, value: AnswerWeight) => void
   nextQuestion: () => void
   resetAssessment: () => void
+  hydrateAnswers: (answers: Array<AnswerWeight | undefined>) => void
   signIn: (userData: UserData) => void
   signOut: () => void
 }
@@ -67,6 +68,14 @@ export const useAssessmentStore = create<AssessmentState>()((set, get) => ({
   },
   resetAssessment: () => {
     set({ answersArray: [], currentQuestionId: 1 })
+  },
+  hydrateAnswers: (answers) => {
+    const trimmedAnswers = answers.slice(0, questions.length)
+    const currentQuestionId = getCurrentQuestionIdFromAnswers(trimmedAnswers)
+    set({
+      answersArray: trimmedAnswers,
+      currentQuestionId,
+    })
   },
   signIn: (userData: UserData) => {
     const currentQuestionId = getCurrentQuestionIdFromAnswers(get().answersArray)

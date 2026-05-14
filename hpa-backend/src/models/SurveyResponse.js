@@ -1,5 +1,22 @@
 const mongoose = require("mongoose");
 
+const questionAnswerSchema = new mongoose.Schema(
+  {
+    questionId: {
+      type: Number,
+      required: true,
+      min: 1
+    },
+    answer: {
+      type: Number,
+      required: true,
+      min: 1,
+      max: 5
+    }
+  },
+  { _id: false }
+);
+
 const categorySchema = new mongoose.Schema(
   {
     categoryId: {
@@ -34,38 +51,11 @@ const categorySchema = new mongoose.Schema(
 
 const surveyResponseSchema = new mongoose.Schema(
   {
-    userData: {
-      employeeCode: {
-        type: String,
-        required: true,
-        trim: true
-      },
-      name: {
-        type: String,
-        required: true,
-        trim: true
-      },
-      email: {
-        type: String,
-        required: true,
-        trim: true,
-        lowercase: true
-      },
-      Department: {
-        type: String,
-        required: true,
-        trim: true
-      },
-      Designation: {
-        type: String,
-        required: true,
-        trim: true
-      },
-      entity: {
-        type: String,
-        required: true,
-        trim: true
-      }
+    userId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+      required: true,
+      unique: true
     },
     categoryResults: {
       categories: {
@@ -83,12 +73,17 @@ const surveyResponseSchema = new mongoose.Schema(
       }
     },
     questionsAnswered: {
-      type: [Number],
+      type: [questionAnswerSchema],
       required: true,
       validate: {
         validator: (value) => Array.isArray(value),
         message: "questionsAnswered must be an array."
       }
+    },
+    isCompleted: {
+      type: Boolean,
+      required: true,
+      default: false
     },
     submittedAt: {
       type: Date,
