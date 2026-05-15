@@ -15,6 +15,7 @@ import type { UserData } from '#/store/assessment-store'
 import {
   getActiveMicrosoftAccount,
   isMsalConfigured,
+  loginWithMicrosoft,
   logoutMicrosoft,
   toUserData,
 } from '#/lib/msal-auth'
@@ -191,11 +192,11 @@ function buildAnsweredEntries(answersArray: Array<number | undefined>) {
     answer === undefined
       ? []
       : [
-          {
-            questionId: index + 1,
-            answer,
-          },
-        ],
+        {
+          questionId: index + 1,
+          answer,
+        },
+      ],
   )
 }
 
@@ -356,9 +357,33 @@ function App() {
     setOtherEntity('')
   }
 
-  const handleLogin = () => {
+  const handleLogin = async () => {
     resetProfileForm()
-    setShowProfileForm(true)
+    console.log("isMsalConfigured: ", isMsalConfigured())
+
+    if (!isMsalConfigured()) {
+      setShowProfileForm(true)
+      return
+    }
+
+    try {
+      const account = await loginWithMicrosoft()
+      console.log(account)
+      const microsoftUser = toUserData(account)
+      setProfileForm((current) => ({
+        ...current,
+        name: microsoftUser.name,
+        email: microsoftUser.email,
+      }))
+      setShowProfileForm(true)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('[Auth] Microsoft login failed:', {
+        message: errorMessage,
+        raw: error,
+      })
+      setShowProfileForm(false)
+    }
   }
 
   const handleProfileSubmit = async (event: SubmitEvent<HTMLFormElement>) => {
@@ -602,7 +627,11 @@ function App() {
                   </p>
                 </div>
 
-                <Button className="mt-8 w-full flex items-center justify-center gap-3" size="lg" onClick={handleLogin}>
+                <Button
+                  className="mt-8 w-full flex items-center justify-center gap-3"
+                  size="lg"
+                  onClick={() => void handleLogin()}
+                >
                   <img
                     src="/microsoft.png"
                     alt="Microsoft Logo"
@@ -610,7 +639,7 @@ function App() {
                   />
                   Sign in with Microsoft Single Sign-On
                 </Button>
-          
+
               </div>
             </section>
           </div>

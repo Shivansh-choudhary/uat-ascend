@@ -25,15 +25,18 @@ async function getMsalInstance() {
 
   if (!msalInstancePromise) {
     msalInstancePromise = import('@azure/msal-browser').then(
-      ({ PublicClientApplication }) =>
-        new PublicClientApplication({
+      async ({ PublicClientApplication }) => {
+        const instance = new PublicClientApplication({
           auth: {
             clientId: clientId ?? '',
             authority,
             redirectUri:
               import.meta.env.VITE_MSAL_REDIRECT_URI ?? window.location.origin,
           },
-        }),
+        })
+        await instance.initialize()
+        return instance
+      },
     )
   }
 
@@ -60,10 +63,6 @@ export async function loginWithMicrosoft() {
   }
 
   const response = await msalInstance.loginPopup(loginRequest)
-  if (!response.account) {
-    throw new Error('Microsoft login completed without an account.')
-  }
-
   msalInstance.setActiveAccount(response.account)
   return response.account
 }
@@ -95,11 +94,12 @@ export async function getActiveMicrosoftAccount() {
     return activeAccount
   }
 
-  const fallbackAccount = msalInstance.getAllAccounts()[0] ?? null
-  if (fallbackAccount) {
-    msalInstance.setActiveAccount(fallbackAccount)
+  const fallbackAccount = msalInstance.getAllAccounts().at(0)
+  if (!fallbackAccount) {
+    return null
   }
 
+  msalInstance.setActiveAccount(fallbackAccount)
   return fallbackAccount
 }
 
