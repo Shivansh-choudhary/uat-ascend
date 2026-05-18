@@ -13,11 +13,11 @@ import { Badge } from '#/components/ui/badge'
 import { createEmptyUserData, useAssessmentStore } from '#/store/assessment-store'
 import type { UserData } from '#/store/assessment-store'
 import {
-  getActiveMicrosoftAccount,
+  applyMicrosoftAccountToProfile,
+  handleMicrosoftRedirect,
   isMsalConfigured,
   loginWithMicrosoft,
   logoutMicrosoft,
-  toUserData,
 } from '#/lib/msal-auth'
 import { Progress } from '#/components/ui/progress'
 import { cn } from '#/lib/utils'
@@ -257,6 +257,9 @@ function App() {
   const [remainingSeconds, setRemainingSeconds] = useState(ASSESSMENT_DURATION_SECONDS)
   const [isTimerActive, setIsTimerActive] = useState(false)
   const [timerRunId, setTimerRunId] = useState(0)
+  const [authError, setAuthError] = useState<string | null>(null)
+  const [isAuthRedirecting, setIsAuthRedirecting] = useState(false)
+  const [isHandlingMsalRedirect, setIsHandlingMsalRedirect] = useState(true)
   const [isCheckingCompletion, setIsCheckingCompletion] = useState(false)
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState(false)
   const [activeUserId, setActiveUserId] = useState('')
@@ -355,32 +358,41 @@ function App() {
     setOtherEntity('')
   }
 
+  const openProfileFormFromMicrosoftAccount = (
+    account: NonNullable<Awaited<ReturnType<typeof handleMicrosoftRedirect>>>,
+  ) => {
+    const { name, email } = applyMicrosoftAccountToProfile(account)
+    setProfileForm((current) => ({
+      ...current,
+      name,
+      email,
+    }))
+    setShowProfileForm(true)
+    setAuthError(null)
+  }
+
   const handleLogin = async () => {
     resetProfileForm()
-    console.log("isMsalConfigured: ", isMsalConfigured())
+    setAuthError(null)
 
     if (!isMsalConfigured()) {
-      setShowProfileForm(true)
+      setAuthError(
+        'Microsoft SSO is not configured. Set VITE_MSAL_CLIENT_ID and VITE_MSAL_TENANT_ID in .env.production, then run npm run build.',
+      )
       return
     }
 
+    setIsAuthRedirecting(true)
     try {
-      const account = await loginWithMicrosoft()
-      console.log(account)
-      const microsoftUser = toUserData(account)
-      setProfileForm((current) => ({
-        ...current,
-        name: microsoftUser.name,
-        email: microsoftUser.email,
-      }))
-      setShowProfileForm(true)
+      await loginWithMicrosoft()
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       console.error('[Auth] Microsoft login failed:', {
         message: errorMessage,
         raw: error,
       })
-      setShowProfileForm(false)
+      setAuthError(errorMessage)
+      setIsAuthRedirecting(false)
     }
   }
 
@@ -483,19 +495,27 @@ function App() {
   }
 
   useEffect(() => {
-    if (isLoggedIn || !isMsalConfigured()) {
+    if (isLoggedIn) {
+      setIsHandlingMsalRedirect(false)
       return
     }
 
     void (async () => {
-      const account = await getActiveMicrosoftAccount()
-      if (!account) {
-        return
+      try {
+        const account = await handleMicrosoftRedirect()
+        if (account) {
+          openProfileFormFromMicrosoftAccount(account)
+        }
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        console.error('[Auth] Microsoft redirect handling failed:', error)
+        setAuthError(errorMessage)
+      } finally {
+        setIsHandlingMsalRedirect(false)
+        setIsAuthRedirecting(false)
       }
-
-      signIn(toUserData(account))
     })()
-  }, [isLoggedIn, signIn])
+  }, [isLoggedIn])
 
   useEffect(() => {
     console.log('[Auth/Survey State]', {
@@ -624,9 +644,16 @@ function App() {
                   </p>
                 </div>
 
+                {authError ? (
+                  <p className="mt-6 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                    {authError}
+                  </p>
+                ) : null}
+
                 <Button
                   className="mt-8 w-full flex items-center justify-center gap-3"
                   size="lg"
+                  disabled={isAuthRedirecting || isHandlingMsalRedirect}
                   onClick={() => void handleLogin()}
                 >
                   <img
@@ -634,7 +661,11 @@ function App() {
                     alt="Microsoft Logo"
                     className="h-5 w-5 object-contain"
                   />
-                  Sign in with Microsoft Single Sign-On
+                  {isHandlingMsalRedirect
+                    ? 'Completing sign in…'
+                    : isAuthRedirecting
+                      ? 'Redirecting to Microsoft…'
+                      : 'Sign in with Microsoft Single Sign-On'}
                 </Button>
 
               </div>

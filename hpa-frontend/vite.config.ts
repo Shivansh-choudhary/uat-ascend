@@ -14,6 +14,12 @@ export default defineConfig(({ mode }) => {
       ? PRODUCTION_API_ORIGIN
       : env.VITE_API_BASE_URL?.trim() || ''
 
+  const msalClientId = env.VITE_MSAL_CLIENT_ID?.trim() ?? ''
+  const msalTenantId = env.VITE_MSAL_TENANT_ID?.trim() ?? ''
+  const msalRedirectUri =
+    env.VITE_MSAL_REDIRECT_URI?.trim() ||
+    (mode === 'production' ? PRODUCTION_API_ORIGIN : '')
+
   return {
     server: {
       host: '0.0.0.0',
@@ -29,6 +35,9 @@ export default defineConfig(({ mode }) => {
     plugins: [tailwindcss(), tanstackStart(), viteReact()],
     define: {
       'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiBaseUrl),
+      'import.meta.env.VITE_MSAL_CLIENT_ID': JSON.stringify(msalClientId),
+      'import.meta.env.VITE_MSAL_TENANT_ID': JSON.stringify(msalTenantId),
+      'import.meta.env.VITE_MSAL_REDIRECT_URI': JSON.stringify(msalRedirectUri),
     },
   }
 })

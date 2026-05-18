@@ -1,18 +1,21 @@
 import type {
   AccountInfo,
-  PopupRequest,
   PublicClientApplication,
+  RedirectRequest,
 } from '@azure/msal-browser'
 import type { UserData } from '#/store/assessment-store'
 
-const clientId = import.meta.env.VITE_MSAL_CLIENT_ID
-const tenantId = import.meta.env.VITE_MSAL_TENANT_ID
+const clientId = import.meta.env.VITE_MSAL_CLIENT_ID?.trim() ?? ''
+const tenantId = import.meta.env.VITE_MSAL_TENANT_ID?.trim() ?? ''
+const redirectUri =
+  import.meta.env.VITE_MSAL_REDIRECT_URI?.trim() ||
+  (typeof window !== 'undefined' ? window.location.origin : '')
 
 const authority = tenantId
   ? `https://login.microsoftonline.com/${tenantId}`
   : 'https://login.microsoftonline.com/common'
 
-const loginRequest: PopupRequest = {
+const loginRequest: RedirectRequest = {
   scopes: ['openid', 'profile', 'email', 'User.Read'],
 }
 
@@ -28,10 +31,14 @@ async function getMsalInstance() {
       async ({ PublicClientApplication }) => {
         const instance = new PublicClientApplication({
           auth: {
-            clientId: clientId ?? '',
+            clientId,
             authority,
-            redirectUri:
-              import.meta.env.VITE_MSAL_REDIRECT_URI ?? window.location.origin,
+            redirectUri,
+            navigateToLoginRequestUrl: true,
+          },
+          cache: {
+            cacheLocation: 'sessionStorage',
+            storeAuthStateInCookie: true,
           },
         })
         await instance.initialize()
@@ -44,15 +51,35 @@ async function getMsalInstance() {
 }
 
 function ensureMsalConfigured() {
-  if (!clientId || !tenantId) {
+  if (!isMsalConfigured()) {
     throw new Error(
-      'Microsoft SSO is not configured. Set VITE_MSAL_CLIENT_ID and VITE_MSAL_TENANT_ID.',
+      'Microsoft SSO is not configured. Set VITE_MSAL_CLIENT_ID and VITE_MSAL_TENANT_ID, then rebuild the frontend.',
     )
   }
 }
 
 export function isMsalConfigured() {
-  return Boolean(clientId && tenantId)
+  return clientId.length > 0 && tenantId.length > 0
+}
+
+/** Call on app load — completes login after Microsoft redirect. */
+export async function handleMicrosoftRedirect(): Promise<AccountInfo | null> {
+  if (!isMsalConfigured()) {
+    return null
+  }
+
+  const msalInstance = await getMsalInstance()
+  if (!msalInstance) {
+    return null
+  }
+
+  const result = await msalInstance.handleRedirectPromise()
+  if (result?.account) {
+    msalInstance.setActiveAccount(result.account)
+    return result.account
+  }
+
+  return null
 }
 
 export async function loginWithMicrosoft() {
@@ -62,9 +89,7 @@ export async function loginWithMicrosoft() {
     throw new Error('Microsoft SSO is only available in the browser.')
   }
 
-  const response = await msalInstance.loginPopup(loginRequest)
-  msalInstance.setActiveAccount(response.account)
-  return response.account
+  await msalInstance.loginRedirect(loginRequest)
 }
 
 export async function logoutMicrosoft(account?: AccountInfo | null) {
@@ -77,13 +102,17 @@ export async function logoutMicrosoft(account?: AccountInfo | null) {
     return
   }
 
-  await msalInstance.logoutPopup({
+  await msalInstance.logoutRedirect({
     account: account ?? msalInstance.getActiveAccount() ?? undefined,
-    postLogoutRedirectUri: window.location.origin,
+    postLogoutRedirectUri: redirectUri || window.location.origin,
   })
 }
 
 export async function getActiveMicrosoftAccount() {
+  if (!isMsalConfigured()) {
+    return null
+  }
+
   const msalInstance = await getMsalInstance()
   if (!msalInstance) {
     return null
@@ -113,5 +142,15 @@ export function toUserData(account: AccountInfo): UserData {
     Department: '',
     Designation: rest.length > 0 ? rest.join(' ') : first || 'Employee',
     entity: '',
+  }
+}
+
+export function applyMicrosoftAccountToProfile(
+  account: AccountInfo,
+): Pick<UserData, 'name' | 'email'> {
+  const user = toUserData(account)
+  return {
+    name: user.name,
+    email: user.email,
   }
 }
