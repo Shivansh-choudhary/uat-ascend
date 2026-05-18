@@ -10,8 +10,9 @@ const PRODUCTION_API_ORIGIN = 'https://sobhaascend.sobhaapps.com'
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, process.cwd(), '')
   const apiBaseUrl =
-    env.VITE_API_BASE_URL?.trim() ||
-    (mode === 'production' ? PRODUCTION_API_ORIGIN : '')
+    mode === 'production'
+      ? PRODUCTION_API_ORIGIN
+      : env.VITE_API_BASE_URL?.trim() || ''
 
   return {
     server: {
