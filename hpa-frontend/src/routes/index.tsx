@@ -24,6 +24,7 @@ import { cn } from '#/lib/utils'
 import { Separator } from '#/components/ui/separator'
 import { EmployeeDetailsForm } from '#/components/EmployeeDetailsForm'
 import { AuthHeroPanel } from '#/components/AuthHeroPanel'
+import { apiUrl, getApiBaseUrl } from '#/lib/api'
 
 export const Route = createFileRoute('/')({ component: App })
 
@@ -95,11 +96,7 @@ interface ResultData {
   isCompleted: boolean
 }
 
-const DEFAULT_API_BASE_URL =
-  typeof window !== 'undefined' ? window.location.origin : ''
-
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? DEFAULT_API_BASE_URL
-
+const API_BASE_URL = getApiBaseUrl()
 
 const ASSESSMENT_DURATION_SECONDS = 7 * 60
 const SECONDS_PER_QUESTION = ASSESSMENT_DURATION_SECONDS / questions.length
@@ -289,7 +286,7 @@ function App() {
   }
 
   const saveResultsToDatabase = async (resultData: ResultData) => {
-    const endpoint = `${API_BASE_URL}/api/surveys/responses`
+    const endpoint = apiUrl('/api/surveys/responses')
     console.log('[Survey][Frontend] Sending POST request:', {
       endpoint,
       method: 'POST',
@@ -397,7 +394,7 @@ function App() {
     setIsCheckingCompletion(true)
 
     try {
-      const endpoint = `${API_BASE_URL}/api/surveys/users/session`
+      const endpoint = apiUrl('/api/surveys/users/session')
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
