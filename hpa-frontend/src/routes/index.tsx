@@ -377,7 +377,7 @@ function App() {
 
     if (!isMsalConfigured()) {
       setAuthError(
-        'Microsoft SSO is not configured. Set VITE_MSAL_CLIENT_ID and VITE_MSAL_TENANT_ID in .env.production, then run npm run build.',
+        'Microsoft SSO is not configured. Add VITE_MSAL_CLIENT_ID and VITE_MSAL_TENANT_ID to hpa-frontend/.env.production.local, then run npm run build and restart the frontend.',
       )
       return
     }
