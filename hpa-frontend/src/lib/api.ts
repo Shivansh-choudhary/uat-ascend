@@ -1,9 +1,12 @@
-/** Production API URLs — baked as string literals (not :5001, not server IP). */
-export const API_SURVEY_SESSION_URL =
-  'https://sobhaascend.sobhaapps.com/api/surveys/users/session'
+const PRODUCTION_ORIGIN = 'https://sobhaascend.sobhaapps.com'
 
-export const API_SURVEY_RESPONSES_URL =
-  'https://sobhaascend.sobhaapps.com/api/surveys/responses'
+/** All backend survey routes (see hpa-backend/src/routes/surveyRoutes.js). */
+export const SURVEY_API_PATHS = {
+  userSession: '/api/surveys/users/session',
+  saveResponse: '/api/surveys/responses',
+  listResponses: '/api/surveys/responses',
+  responseStatus: '/api/surveys/responses/status',
+} as const
 
 function devApiOrigin(): string {
   const fromEnv = import.meta.env.VITE_API_BASE_URL?.trim()
@@ -13,24 +16,35 @@ function devApiOrigin(): string {
   return 'http://localhost:5001'
 }
 
-/** Dev-only branch is removed from production bundles (import.meta.env.DEV === false). */
-export function surveySessionUrl(): string {
-  if (import.meta.env.DEV) {
-    return `${devApiOrigin()}/api/surveys/users/session`
-  }
-  return API_SURVEY_SESSION_URL
+function productionUrl(path: string): string {
+  return `${PRODUCTION_ORIGIN}${path}`
 }
 
-export function surveyResponsesUrl(): string {
+function resolveUrl(path: string): string {
   if (import.meta.env.DEV) {
-    return `${devApiOrigin()}/api/surveys/responses`
+    return `${devApiOrigin()}${path}`
   }
-  return API_SURVEY_RESPONSES_URL
+  return productionUrl(path)
 }
+
+/** POST — prepare / resume user session */
+export const API_SURVEY_SESSION_URL = resolveUrl(SURVEY_API_PATHS.userSession)
+
+/** POST — save or update survey answers */
+export const API_SURVEY_RESPONSES_URL = resolveUrl(SURVEY_API_PATHS.saveResponse)
+
+/** GET — list all responses (admin) */
+export const API_SURVEY_RESPONSES_LIST_URL = resolveUrl(SURVEY_API_PATHS.listResponses)
+
+/** GET — check completion by email (?email=) */
+export function apiSurveyResponsesStatusUrl(email: string): string {
+  const query = `?email=${encodeURIComponent(email)}`
+  return resolveUrl(`${SURVEY_API_PATHS.responseStatus}${query}`)
+}
+
+/** GET — backend health */
+export const API_HEALTH_URL = resolveUrl('/health')
 
 export function getApiBaseUrl(): string {
-  if (import.meta.env.DEV) {
-    return devApiOrigin()
-  }
-  return 'https://sobhaascend.sobhaapps.com'
+  return import.meta.env.DEV ? devApiOrigin() : PRODUCTION_ORIGIN
 }
