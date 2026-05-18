@@ -14,6 +14,7 @@ import { createEmptyUserData, useAssessmentStore } from '#/store/assessment-stor
 import type { UserData } from '#/store/assessment-store'
 import {
   applyMicrosoftAccountToProfile,
+  formatMsalError,
   handleMicrosoftRedirect,
   isMsalConfigured,
   loginWithMicrosoft,
@@ -386,7 +387,7 @@ function App() {
     try {
       await loginWithMicrosoft()
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      const errorMessage = formatMsalError(error)
       console.error('[Auth] Microsoft login failed:', {
         message: errorMessage,
         raw: error,
@@ -507,7 +508,7 @@ function App() {
           openProfileFormFromMicrosoftAccount(account)
         }
       } catch (error) {
-        const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+        const errorMessage = formatMsalError(error)
         console.error('[Auth] Microsoft redirect handling failed:', error)
         setAuthError(errorMessage)
       } finally {

@@ -62,6 +62,29 @@ export function isMsalConfigured() {
   return clientId.length > 0 && tenantId.length > 0
 }
 
+/** Maps common Azure AD errors to actionable setup hints. */
+export function formatMsalError(error: unknown): string {
+  const message =
+    error instanceof Error
+      ? error.message
+      : typeof error === 'string'
+        ? error
+        : 'Unknown error'
+
+  if (
+    message.includes('AADSTS9002326') ||
+    message.includes('Single-Page Application')
+  ) {
+    return (
+      'Azure app registration must use platform type "Single-page application" (SPA), not "Web". ' +
+      'In Azure Portal → App registrations → your app → Authentication: add redirect URI ' +
+      `${redirectUri || 'https://sobhaascend.sobhaapps.com'} under SPA (and remove it from Web if listed there).`
+    )
+  }
+
+  return message
+}
+
 /** Call on app load — completes login after Microsoft redirect. */
 export async function handleMicrosoftRedirect(): Promise<AccountInfo | null> {
   if (!isMsalConfigured()) {
