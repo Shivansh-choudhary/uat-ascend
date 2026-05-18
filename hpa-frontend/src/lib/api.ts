@@ -1,24 +1,36 @@
-/** Public API host — must match nginx server_name (not :5001). */
-export const PRODUCTION_API_ORIGIN = 'https://sobhaascend.sobhaapps.com'
+/** Production API URLs — baked as string literals (not :5001, not server IP). */
+export const API_SURVEY_SESSION_URL =
+  'https://sobhaascend.sobhaapps.com/api/surveys/users/session'
 
-export function getApiBaseUrl(): string {
-  if (import.meta.env.PROD) {
-    return PRODUCTION_API_ORIGIN
-  }
+export const API_SURVEY_RESPONSES_URL =
+  'https://sobhaascend.sobhaapps.com/api/surveys/responses'
 
+function devApiOrigin(): string {
   const fromEnv = import.meta.env.VITE_API_BASE_URL?.trim()
   if (fromEnv) {
     return fromEnv.replace(/\/$/, '')
   }
-
-  if (typeof window !== 'undefined') {
-    return window.location.origin
-  }
-
   return 'http://localhost:5001'
 }
 
-export function apiUrl(path: string): string {
-  const normalizedPath = path.startsWith('/') ? path : `/${path}`
-  return `${getApiBaseUrl()}${normalizedPath}`
+/** Dev-only branch is removed from production bundles (import.meta.env.DEV === false). */
+export function surveySessionUrl(): string {
+  if (import.meta.env.DEV) {
+    return `${devApiOrigin()}/api/surveys/users/session`
+  }
+  return API_SURVEY_SESSION_URL
+}
+
+export function surveyResponsesUrl(): string {
+  if (import.meta.env.DEV) {
+    return `${devApiOrigin()}/api/surveys/responses`
+  }
+  return API_SURVEY_RESPONSES_URL
+}
+
+export function getApiBaseUrl(): string {
+  if (import.meta.env.DEV) {
+    return devApiOrigin()
+  }
+  return 'https://sobhaascend.sobhaapps.com'
 }

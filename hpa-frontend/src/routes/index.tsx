@@ -24,7 +24,11 @@ import { cn } from '#/lib/utils'
 import { Separator } from '#/components/ui/separator'
 import { EmployeeDetailsForm } from '#/components/EmployeeDetailsForm'
 import { AuthHeroPanel } from '#/components/AuthHeroPanel'
-import { apiUrl, getApiBaseUrl } from '#/lib/api'
+import {
+  getApiBaseUrl,
+  surveyResponsesUrl,
+  surveySessionUrl,
+} from '#/lib/api'
 
 export const Route = createFileRoute('/')({ component: App })
 
@@ -286,7 +290,7 @@ function App() {
   }
 
   const saveResultsToDatabase = async (resultData: ResultData) => {
-    const endpoint = apiUrl('/api/surveys/responses')
+    const endpoint = surveyResponsesUrl()
     console.log('[Survey][Frontend] Sending POST request:', {
       endpoint,
       method: 'POST',
@@ -394,7 +398,7 @@ function App() {
     setIsCheckingCompletion(true)
 
     try {
-      const endpoint = apiUrl('/api/surveys/users/session')
+      const endpoint = surveySessionUrl()
       const response = await fetch(endpoint, {
         method: 'POST',
         headers: {
