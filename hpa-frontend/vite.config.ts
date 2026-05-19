@@ -8,7 +8,12 @@ import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
 const PRODUCTION_API_ORIGIN = 'https://sobhaascend.sobhaapps.com'
+const LOCAL_BACKEND_ORIGIN = 'http://localhost:5001'
 const configDir = path.dirname(fileURLToPath(import.meta.url))
+
+function isLocalApiUrl(url: string) {
+  return /^https?:\/\/(localhost|127\.0\.0\.1)(:\d+)?\/?$/i.test(url)
+}
 
 /** Fix UTF-8 BOM on first line of .env files (breaks VITE_MSAL_CLIENT_ID). */
 function loadProjectEnv(mode: string) {
@@ -26,10 +31,19 @@ function loadProjectEnv(mode: string) {
 
 export default defineConfig(({ mode }) => {
   const env = loadProjectEnv(mode)
+  const devApiEnv = env.VITE_API_BASE_URL?.trim() ?? ''
+  const devUseProxy =
+    mode !== 'production' && (!devApiEnv || isLocalApiUrl(devApiEnv))
   const apiBaseUrl =
     mode === 'production'
       ? PRODUCTION_API_ORIGIN
-      : env.VITE_API_BASE_URL?.trim() || ''
+      : devUseProxy
+        ? ''
+        : devApiEnv.replace(/\/$/, '')
+  const devProxy = {
+    '/api': { target: LOCAL_BACKEND_ORIGIN, changeOrigin: true },
+    '/health': { target: LOCAL_BACKEND_ORIGIN, changeOrigin: true },
+  }
 
   const msalClientId = env.VITE_MSAL_CLIENT_ID?.trim() ?? ''
   const msalTenantId = env.VITE_MSAL_TENANT_ID?.trim() ?? ''
@@ -51,11 +65,13 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 3010,
       strictPort: true,
+      proxy: devUseProxy ? devProxy : undefined,
     },
     preview: {
       host: '0.0.0.0',
       port: 3010,
       strictPort: true,
+      proxy: devUseProxy ? devProxy : undefined,
     },
     resolve: { tsconfigPaths: true },
     plugins: [tailwindcss(), tanstackStart(), viteReact()],

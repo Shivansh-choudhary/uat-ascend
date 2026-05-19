@@ -49,6 +49,14 @@ function roundTo2(value: number) {
   return Number(value.toFixed(2))
 }
 
+function getScoreLevelDescriptor(averageScore: number) {
+  return (
+    scoreLevels.find(
+      (level) => averageScore >= level.min && averageScore <= level.max,
+    )?.descriptor ?? 'Developing'
+  )
+}
+
 function calculateCategoryResults(
   answers: Record<number, number>,
 ): CategoryResult {
@@ -61,11 +69,7 @@ function calculateCategoryResults(
       const averageScore = rawSum / category.questions.length
       const weightedScore = averageScore * category.weight
 
-      // find the score level from the average score
-      const scoreLevel =
-        scoreLevels.find(
-          (level) => averageScore >= level.min && averageScore <= level.max,
-        )?.descriptor ?? ''
+      const scoreLevel = getScoreLevelDescriptor(averageScore)
 
       return {
         categoryId: category.id,
@@ -88,6 +92,53 @@ function calculateCategoryResults(
   return {
     categories: categoryScores,
     letterGrade,
+  }
+}
+
+/** Partial save: only categories with at least one answered question (avoids invalid scoreLevel). */
+function calculateCategoryResultsFromAnsweredOnly(
+  answersArray: Array<number | undefined>,
+): CategoryResult {
+  const answersMap = buildAnswersMapFromArray(answersArray)
+  const categoryScores: CategoryResult['categories'] = []
+
+  for (const category of categories) {
+    const answeredQuestionIds = category.questions.filter(
+      (questionId) => answersMap[questionId] !== undefined,
+    )
+    if (answeredQuestionIds.length === 0) {
+      continue
+    }
+
+    const rawSum = answeredQuestionIds.reduce(
+      (sum, questionId) => sum + answersMap[questionId]!,
+      0,
+    )
+    const averageScore = rawSum / answeredQuestionIds.length
+    const weightedScore = averageScore * category.weight
+
+    categoryScores.push({
+      categoryId: category.id,
+      title: category.title,
+      totalScore: roundTo2(rawSum),
+      averageScore: roundTo2(averageScore),
+      weightedScore: roundTo2(weightedScore),
+      scoreLevel: getScoreLevelDescriptor(averageScore),
+    })
+  }
+
+  const weightSum = categoryScores.reduce((sum, item) => {
+    const category = categories.find((entry) => entry.id === item.categoryId)
+    return sum + (category?.weight ?? 0)
+  }, 0)
+  const overallWeightedAverage =
+    weightSum > 0
+      ? categoryScores.reduce((sum, item) => sum + item.weightedScore, 0) / weightSum
+      : 0
+
+  return {
+    categories: categoryScores,
+    letterGrade: getLetterGradeFromAverage(overallWeightedAverage),
   }
 }
 
@@ -237,6 +288,31 @@ function calculateResumeDurationSeconds(answersArray: Array<number | undefined>)
   return Math.max(1, Math.ceil(remainingQuestions * SECONDS_PER_QUESTION))
 }
 
+function isUserProfileComplete(user: {
+  employeeCode?: string
+  Department?: string
+  Designation?: string
+  entity?: string
+}) {
+  return Boolean(
+    user.employeeCode?.trim() &&
+    user.Department?.trim() &&
+    user.Designation?.trim() &&
+    user.entity?.trim(),
+  )
+}
+
+function userDataFromBackend(backendUser: Record<string, unknown>): UserData {
+  return {
+    employeeCode: String(backendUser.employeeCode ?? ''),
+    name: String(backendUser.name ?? ''),
+    email: String(backendUser.email ?? ''),
+    Department: String(backendUser.Department ?? ''),
+    Designation: String(backendUser.Designation ?? ''),
+    entity: String(backendUser.entity ?? ''),
+  }
+}
+
 function App() {
   const {
     currentQuestionId,
@@ -261,6 +337,7 @@ function App() {
   const [authError, setAuthError] = useState<string | null>(null)
   const [isAuthRedirecting, setIsAuthRedirecting] = useState(false)
   const [isHandlingMsalRedirect, setIsHandlingMsalRedirect] = useState(true)
+  const [isRestoringSession, setIsRestoringSession] = useState(false)
   const [isCheckingCompletion, setIsCheckingCompletion] = useState(false)
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState(false)
   const [activeUserId, setActiveUserId] = useState('')
@@ -283,12 +360,20 @@ function App() {
     if (!activeUserId) {
       return null
     }
-    const answersMap = buildAnswersMapFromArray(answersArray)
-    const results = calculateCategoryResults(answersMap)
+    const questionsAnswered = buildAnsweredEntries(answersArray)
+    if (questionsAnswered.length === 0) {
+      return null
+    }
+    const categoryResults = isCompletedState
+      ? calculateCategoryResults(buildAnswersMapFromArray(answersArray))
+      : calculateCategoryResultsFromAnsweredOnly(answersArray)
+    if (categoryResults.categories.length === 0) {
+      return null
+    }
     return {
       userId: activeUserId,
-      categoryResults: results,
-      questionsAnswered: buildAnsweredEntries(answersArray),
+      categoryResults,
+      questionsAnswered,
       isCompleted: isCompletedState,
     }
   }
@@ -359,17 +444,108 @@ function App() {
     setOtherEntity('')
   }
 
-  const openProfileFormFromMicrosoftAccount = (
+  const applySessionFromBackend = (
+    normalizedUser: UserData,
+    backendUser: Record<string, unknown>,
+    backendResponse: Record<string, unknown> | null | undefined,
+  ) => {
+    const backendUserId = String(backendUser._id ?? backendUser.id ?? '')
+    if (!backendUserId) {
+      throw new Error('User ID was not returned by the backend.')
+    }
+
+    signIn(normalizedUser)
+    setActiveUserId(backendUserId)
+
+    const restoredAnswers = toAnswersArrayFromEntries(
+      backendResponse?.questionsAnswered as
+        | Array<{ questionId: number; answer: number }>
+        | undefined,
+    )
+    const hasSavedProgress = restoredAnswers.some((answer) => answer !== undefined)
+    const completedFromBackend =
+      Boolean(backendUser.hasCompletedQuestions) ||
+      Boolean(backendResponse?.isCompleted)
+
+    if (hasSavedProgress) {
+      hydrateAnswers(restoredAnswers)
+      setRemainingSeconds(calculateResumeDurationSeconds(restoredAnswers))
+      setIsTimerActive(!completedFromBackend)
+      setTimerRunId((v) => v + 1)
+    } else {
+      resetAssessment()
+      setRemainingSeconds(ASSESSMENT_DURATION_SECONDS)
+      setIsTimerActive(false)
+    }
+
+    setHasCompletedAssessment(completedFromBackend)
+    setShowInstructions(!hasSavedProgress && !completedFromBackend)
+    setShowProfileForm(false)
+    setSubmitPhase('idle')
+    autoSubmitStartedRef.current = false
+  }
+
+  const tryRestoreSessionAfterMicrosoftLogin = async (
     account: NonNullable<Awaited<ReturnType<typeof handleMicrosoftRedirect>>>,
   ) => {
     const { name, email } = applyMicrosoftAccountToProfile(account)
-    setProfileForm((current) => ({
-      ...current,
-      name,
-      email,
-    }))
-    setShowProfileForm(true)
+    setIsRestoringSession(true)
     setAuthError(null)
+
+    try {
+      const response = await fetch(API_SURVEY_SESSION_URL, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          userData: { email, name },
+        }),
+      })
+      const body = await response.json().catch(() => null)
+      if (!response.ok) {
+        throw new Error(`Failed to restore user session. Status: ${response.status}`)
+      }
+
+      const backendUser = body?.data?.user as Record<string, unknown> | null | undefined
+      if (!backendUser) {
+        setProfileForm((current) => ({
+          ...current,
+          name,
+          email,
+        }))
+        setShowProfileForm(true)
+        return
+      }
+
+      const restoredUser = userDataFromBackend(backendUser)
+      if (!isUserProfileComplete(restoredUser)) {
+        setProfileForm(restoredUser)
+        setOtherEntity('')
+        setShowProfileForm(true)
+        return
+      }
+
+      applySessionFromBackend(
+        restoredUser,
+        backendUser,
+        body?.data?.response as Record<string, unknown> | null | undefined,
+      )
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('[Survey][Frontend] Failed to restore session after Microsoft login:', {
+        message: errorMessage,
+        raw: error,
+      })
+      setProfileForm((current) => ({
+        ...current,
+        name,
+        email,
+      }))
+      setShowProfileForm(true)
+    } finally {
+      setIsRestoringSession(false)
+    }
   }
 
   const handleLogin = async () => {
@@ -424,39 +600,16 @@ function App() {
         throw new Error(`Failed to prepare user session. Status: ${response.status}`)
       }
 
-      const backendUser = body?.data?.user
-      const backendResponse = body?.data?.response
-      const backendUserId: string = backendUser?._id ?? backendUser?.id ?? ''
-      if (!backendUserId) {
-        throw new Error('User ID was not returned by the backend.')
+      const backendUser = body?.data?.user as Record<string, unknown> | undefined
+      const backendResponse = body?.data?.response as
+        | Record<string, unknown>
+        | null
+        | undefined
+      if (!backendUser) {
+        throw new Error('User was not returned by the backend.')
       }
 
-      signIn(normalizedUser)
-      setActiveUserId(backendUserId)
-
-      const restoredAnswers = toAnswersArrayFromEntries(
-        backendResponse?.questionsAnswered,
-      )
-      const hasSavedProgress = restoredAnswers.some((answer) => answer !== undefined)
-      const completedFromBackend =
-        Boolean(backendUser?.hasCompletedQuestions) || Boolean(backendResponse?.isCompleted)
-
-      if (hasSavedProgress) {
-        hydrateAnswers(restoredAnswers)
-        setRemainingSeconds(calculateResumeDurationSeconds(restoredAnswers))
-        setIsTimerActive(!completedFromBackend)
-        setTimerRunId((v) => v + 1)
-      } else {
-        resetAssessment()
-        setRemainingSeconds(ASSESSMENT_DURATION_SECONDS)
-        setIsTimerActive(false)
-      }
-
-      setHasCompletedAssessment(completedFromBackend)
-      setShowInstructions(!hasSavedProgress && !completedFromBackend)
-      setShowProfileForm(false)
-      setSubmitPhase('idle')
-      autoSubmitStartedRef.current = false
+      applySessionFromBackend(normalizedUser, backendUser, backendResponse)
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error'
       console.error('[Survey][Frontend] Failed to prepare user session:', {
@@ -505,7 +658,7 @@ function App() {
       try {
         const account = await handleMicrosoftRedirect()
         if (account) {
-          openProfileFormFromMicrosoftAccount(account)
+          await tryRestoreSessionAfterMicrosoftLogin(account)
         }
       } catch (error) {
         const errorMessage = formatMsalError(error)
@@ -597,16 +750,19 @@ function App() {
   const handleSaveAndSignOut = async () => {
     const resultData = buildResultPayload(false)
     if (!resultData) {
-      setSubmitPhase('error')
+      await handleSignOut()
       return
     }
 
     setSubmitPhase('submitting')
     autoSubmitStartedRef.current = true
+    setIsTimerActive(false)
     const ok = await saveResultsToDatabase(resultData)
     if (!ok) {
       setSubmitPhase('error')
       autoSubmitStartedRef.current = false
+      setIsTimerActive(true)
+      setTimerRunId((v) => v + 1)
       return
     }
     setSubmitPhase('idle')
@@ -654,7 +810,7 @@ function App() {
                 <Button
                   className="mt-8 w-full flex items-center justify-center gap-3"
                   size="lg"
-                  disabled={isAuthRedirecting || isHandlingMsalRedirect}
+                  disabled={isAuthRedirecting || isHandlingMsalRedirect || isRestoringSession}
                   onClick={() => void handleLogin()}
                 >
                   <img
@@ -662,7 +818,7 @@ function App() {
                     alt="Microsoft Logo"
                     className="h-5 w-5 object-contain"
                   />
-                  {isHandlingMsalRedirect
+                  {isHandlingMsalRedirect || isRestoringSession
                     ? 'Completing sign in…'
                     : isAuthRedirecting
                       ? 'Redirecting to Microsoft…'

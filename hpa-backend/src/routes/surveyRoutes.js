@@ -4,6 +4,19 @@ const User = require("../models/User");
 
 const router = express.Router();
 
+function hasCompleteProfilePayload(payload) {
+  return (
+    typeof payload?.employeeCode === "string" &&
+    payload.employeeCode.trim() &&
+    typeof payload?.Department === "string" &&
+    payload.Department.trim() &&
+    typeof payload?.Designation === "string" &&
+    payload.Designation.trim() &&
+    typeof payload?.entity === "string" &&
+    payload.entity.trim()
+  );
+}
+
 router.post("/users/session", async (req, res) => {
   const payload = req.body?.userData;
   const email = typeof payload?.email === "string" ? payload.email.trim().toLowerCase() : "";
@@ -16,10 +29,42 @@ router.post("/users/session", async (req, res) => {
 
   console.log("[Survey][POST] /users/session payload summary:", {
     email,
-    name: payload?.name ?? null
+    name: payload?.name ?? null,
+    isProfileSubmission: hasCompleteProfilePayload(payload)
   });
 
   try {
+    if (!hasCompleteProfilePayload(payload)) {
+      const existingUser = await User.findOne({ email });
+
+      if (!existingUser) {
+        return res.status(200).json({
+          message: "User session not found.",
+          data: {
+            user: null,
+            response: null
+          }
+        });
+      }
+
+      if (typeof payload?.name === "string" && payload.name.trim()) {
+        existingUser.name = payload.name.trim();
+        await existingUser.save();
+      }
+
+      const existingResponse = await SurveyResponse.findOne({ userId: existingUser._id }).sort({
+        updatedAt: -1
+      });
+
+      return res.status(200).json({
+        message: "User session restored.",
+        data: {
+          user: existingUser,
+          response: existingResponse
+        }
+      });
+    }
+
     const user = await User.findOneAndUpdate(
       { email },
       {

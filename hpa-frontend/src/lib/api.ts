@@ -11,9 +11,14 @@ export const SURVEY_API_PATHS = {
 function devApiOrigin(): string {
   const fromEnv = import.meta.env.VITE_API_BASE_URL?.trim()
   if (fromEnv) {
+    // Local backend is HTTP only — https://localhost:5001 always fails in the browser
+    if (/^https:\/\/(localhost|127\.0\.0\.1)(:\d+)?$/i.test(fromEnv)) {
+      return fromEnv.replace(/^https:/i, 'http:').replace(/\/$/, '')
+    }
     return fromEnv.replace(/\/$/, '')
   }
-  return 'http://localhost:5001'
+  // Empty in dev: requests go to same origin; Vite proxies /api → localhost:5001
+  return ''
 }
 
 function productionUrl(path: string): string {
