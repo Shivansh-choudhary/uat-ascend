@@ -90,6 +90,11 @@ const surveyResponseSchema = new mongoose.Schema(
       required: true,
       default: false
     },
+    remainingSeconds: {
+      type: Number,
+      min: 0,
+      default: null
+    },
     submittedAt: {
       type: Date,
       default: Date.now

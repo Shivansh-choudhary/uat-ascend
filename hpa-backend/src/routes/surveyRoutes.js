@@ -125,16 +125,27 @@ router.post("/responses", async (req, res) => {
   }
 
   try {
+    const update = {
+      userId,
+      categoryResults: req.body?.categoryResults,
+      questionsAnswered: req.body?.questionsAnswered,
+      isCompleted,
+      timedOut,
+      submittedAt: new Date()
+    };
+
+    const rawRemainingSeconds = req.body?.remainingSeconds;
+    if (
+      rawRemainingSeconds !== undefined &&
+      rawRemainingSeconds !== null &&
+      Number.isFinite(Number(rawRemainingSeconds))
+    ) {
+      update.remainingSeconds = Math.max(0, Math.floor(Number(rawRemainingSeconds)));
+    }
+
     const savedResponse = await SurveyResponse.findOneAndUpdate(
       { userId },
-      {
-        userId,
-        categoryResults: req.body?.categoryResults,
-        questionsAnswered: req.body?.questionsAnswered,
-        isCompleted,
-        timedOut,
-        submittedAt: new Date()
-      },
+      update,
       {
         upsert: true,
         new: true,
@@ -238,7 +249,7 @@ router.get("/responses/status", async (req, res) => {
       userId: existingUser._id
     })
       .sort({ createdAt: -1 })
-      .select("_id createdAt userId isCompleted timedOut questionsAnswered");
+      .select("_id createdAt userId isCompleted timedOut remainingSeconds questionsAnswered");
 
     const hasCompleted = Boolean(existingUser.hasCompletedQuestions);
     const hasTimedOut = Boolean(existingUser.hasTimedOut);
@@ -262,6 +273,7 @@ router.get("/responses/status", async (req, res) => {
             userId: existingResponse.userId ?? null,
             isCompleted: existingResponse.isCompleted,
             timedOut: existingResponse.timedOut,
+            remainingSeconds: existingResponse.remainingSeconds ?? null,
             questionsAnswered: existingResponse.questionsAnswered ?? []
           }
         : null

@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { ChevronDown, ChevronUp, CheckCircle2 } from 'lucide-react'
 import { cn } from '#/lib/utils'
-import type { CategoryResult as CategoryResultType } from '#/routes'
+import type { CategoryResult as CategoryResultType } from '#/lib/survey-types'
 // import Table from shadcn/ui
 import {
   Table,
