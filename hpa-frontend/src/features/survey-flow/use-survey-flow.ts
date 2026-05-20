@@ -219,12 +219,10 @@ export function useSurveyFlowState() {
         message: errorMessage,
         raw: error,
       })
-      setProfileForm((current) => ({
-        ...current,
-        name,
-        email,
-      }))
-      setShowProfileForm(true)
+      setAuthError(
+        'We could not restore your session. Please try signing in again. If this continues, contact support.',
+      )
+      setShowProfileForm(false)
     } finally {
       setIsRestoringSession(false)
     }

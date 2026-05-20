@@ -1,4 +1,3 @@
-const { createRemoteJWKSet, jwtVerify } = require("jose");
 const azureAuth = require("../config/azureAuth");
 const User = require("../models/User");
 const {
@@ -7,9 +6,20 @@ const {
   isSuperAdminRole
 } = require("../constants/userRoles");
 
+/** jose v5+ is ESM-only — load via dynamic import from CommonJS. */
+let joseModulePromise;
+
+function loadJose() {
+  if (!joseModulePromise) {
+    joseModulePromise = import("jose");
+  }
+  return joseModulePromise;
+}
+
 let jwks;
 
-function getJwks() {
+async function getJwks() {
+  const { createRemoteJWKSet } = await loadJose();
   if (!jwks && azureAuth.jwksUri) {
     jwks = createRemoteJWKSet(new URL(azureAuth.jwksUri));
   }
@@ -45,7 +55,8 @@ function isEmailDomainAllowed(email) {
 }
 
 async function verifyBearerToken(token) {
-  const { payload } = await jwtVerify(token, getJwks(), {
+  const { jwtVerify } = await loadJose();
+  const { payload } = await jwtVerify(token, await getJwks(), {
     issuer: azureAuth.issuer,
     audience: azureAuth.clientId
   });
