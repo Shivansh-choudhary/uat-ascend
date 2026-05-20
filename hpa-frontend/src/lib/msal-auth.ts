@@ -85,8 +85,14 @@ export function formatMsalError(error: unknown): string {
   return message
 }
 
+export type MicrosoftRedirectResult = {
+  account: AccountInfo
+  /** Present right after login redirect; use for the first API call if silent refresh is not ready yet. */
+  idToken?: string
+}
+
 /** Call on app load — completes login after Microsoft redirect. */
-export async function handleMicrosoftRedirect(): Promise<AccountInfo | null> {
+export async function handleMicrosoftRedirect(): Promise<MicrosoftRedirectResult | null> {
   if (!isMsalConfigured()) {
     return null
   }
@@ -99,7 +105,10 @@ export async function handleMicrosoftRedirect(): Promise<AccountInfo | null> {
   const result = await msalInstance.handleRedirectPromise()
   if (result?.account) {
     msalInstance.setActiveAccount(result.account)
-    return result.account
+    return {
+      account: result.account,
+      idToken: result.idToken || undefined,
+    }
   }
 
   return null
@@ -155,13 +164,49 @@ export async function getActiveMicrosoftAccount() {
   return fallbackAccount
 }
 
+export async function getMicrosoftAuthToken(
+  preferredIdToken?: string | null,
+): Promise<string | null> {
+  if (preferredIdToken?.trim()) {
+    return preferredIdToken.trim()
+  }
+
+  if (!isMsalConfigured() || typeof window === 'undefined') {
+    return null
+  }
+
+  const msalInstance = await getMsalInstance()
+  if (!msalInstance) {
+    return null
+  }
+
+  const account =
+    msalInstance.getActiveAccount() ?? msalInstance.getAllAccounts().at(0) ?? null
+  if (!account) {
+    return null
+  }
+
+  msalInstance.setActiveAccount(account)
+
+  try {
+    const result = await msalInstance.acquireTokenSilent({
+      ...loginRequest,
+      account,
+    })
+    return result.idToken || null
+  } catch (error) {
+    console.error('[Auth] Failed to acquire Microsoft token for API:', error)
+    return null
+  }
+}
+
 export function toUserData(account: AccountInfo): UserData {
   const fullName = account.name ?? ''
   const [first, ...rest] = fullName.split(' ')
   return {
     employeeCode: '',
     name: fullName || account.username,
-    email: account.username,
+    email: account.username.trim().toLowerCase(),
     Department: '',
     Designation: rest.length > 0 ? rest.join(' ') : first || 'Employee',
     entity: '',

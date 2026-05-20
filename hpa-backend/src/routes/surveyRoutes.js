@@ -1,8 +1,14 @@
 const express = require("express");
 const SurveyResponse = require("../models/SurveyResponse");
 const User = require("../models/User");
+const { requireMicrosoftAuth, requireAdmin } = require("../middleware/authMicrosoft");
+const { resolveSurveyUser, loadSurveyUserDocument } = require("../middleware/resolveSurveyUser");
+const azureAuth = require("../config/azureAuth");
+const { resolveBootstrapRole } = require("../constants/userRoles");
 
 const router = express.Router();
+
+router.use(requireMicrosoftAuth);
 
 function hasCompleteProfilePayload(payload) {
   return (
@@ -17,14 +23,27 @@ function hasCompleteProfilePayload(payload) {
   );
 }
 
-router.post("/users/session", async (req, res) => {
-  const payload = req.body?.userData;
-  const email = typeof payload?.email === "string" ? payload.email.trim().toLowerCase() : "";
-
-  if (!email) {
-    return res.status(400).json({
-      message: "userData.email is required."
+function rejectMismatchedEmail(req, res, payloadEmail) {
+  if (azureAuth.authDisabled || !payloadEmail) {
+    return false;
+  }
+  if (payloadEmail !== req.auth.email) {
+    res.status(403).json({
+      message: "Email in request does not match signed-in Microsoft account."
     });
+    return true;
+  }
+  return false;
+}
+
+router.post("/users/session", resolveSurveyUser, async (req, res) => {
+  const payload = req.body?.userData;
+  const payloadEmail =
+    typeof payload?.email === "string" ? payload.email.trim().toLowerCase() : "";
+  const email = req.surveyUserEmail;
+
+  if (rejectMismatchedEmail(req, res, payloadEmail)) {
+    return;
   }
 
   console.log("[Survey][POST] /users/session payload summary:", {
@@ -47,7 +66,11 @@ router.post("/users/session", async (req, res) => {
         });
       }
 
-      if (typeof payload?.name === "string" && payload.name.trim()) {
+      const tokenName = req.auth?.name?.trim();
+      if (tokenName) {
+        existingUser.name = tokenName;
+        await existingUser.save();
+      } else if (typeof payload?.name === "string" && payload.name.trim()) {
         existingUser.name = payload.name.trim();
         await existingUser.save();
       }
@@ -65,20 +88,29 @@ router.post("/users/session", async (req, res) => {
       });
     }
 
+    const bootstrapRole = resolveBootstrapRole(email, {
+      superAdminEmails: azureAuth.superAdminEmails,
+      adminEmails: azureAuth.adminEmails
+    });
+
     const user = await User.findOneAndUpdate(
       { email },
       {
-        employeeCode: payload?.employeeCode,
-        name: payload?.name,
-        email,
-        Department: payload?.Department,
-        Designation: payload?.Designation,
-        entity: payload?.entity
+        $set: {
+          employeeCode: payload?.employeeCode,
+          name: payload?.name || req.auth?.name || email,
+          email,
+          Department: payload?.Department,
+          Designation: payload?.Designation,
+          entity: payload?.entity
+        },
+        $setOnInsert: {
+          role: bootstrapRole
+        }
       },
       {
         upsert: true,
         new: true,
-        setDefaultsOnInsert: true,
         runValidators: true
       }
     );
@@ -105,107 +137,124 @@ router.post("/users/session", async (req, res) => {
   }
 });
 
-router.post("/responses", async (req, res) => {
-  const userId = req.body?.userId;
-  const isCompleted = Boolean(req.body?.isCompleted);
-  const timedOut = Boolean(req.body?.timedOut);
+router.post(
+  "/responses",
+  resolveSurveyUser,
+  loadSurveyUserDocument,
+  async (req, res) => {
+    const isCompleted = Boolean(req.body?.isCompleted);
+    const timedOut = Boolean(req.body?.timedOut);
+    const user = req.surveyUser;
 
-  console.log("[Survey][POST] /responses payload summary:", {
-    userId: userId ?? null,
-    isCompleted,
-    timedOut,
-    answersCount: Array.isArray(req.body?.questionsAnswered) ? req.body.questionsAnswered.length : 0,
-    categoryCount: Array.isArray(req.body?.categoryResults?.categories) ? req.body.categoryResults.categories.length : 0
-  });
-
-  if (!userId) {
-    return res.status(400).json({
-      message: "userId is required."
-    });
-  }
-
-  try {
-    const update = {
-      userId,
-      categoryResults: req.body?.categoryResults,
-      questionsAnswered: req.body?.questionsAnswered,
-      isCompleted,
-      timedOut,
-      submittedAt: new Date()
-    };
-
-    const rawRemainingSeconds = req.body?.remainingSeconds;
-    if (
-      rawRemainingSeconds !== undefined &&
-      rawRemainingSeconds !== null &&
-      Number.isFinite(Number(rawRemainingSeconds))
-    ) {
-      update.remainingSeconds = Math.max(0, Math.floor(Number(rawRemainingSeconds)));
+    if (!user) {
+      return res.status(404).json({
+        message: "User profile not found. Complete employee details before saving responses."
+      });
     }
 
-    const savedResponse = await SurveyResponse.findOneAndUpdate(
-      { userId },
-      update,
-      {
-        upsert: true,
-        new: true,
-        setDefaultsOnInsert: true,
-        runValidators: true
-      }
-    );
+    const userId = user._id.toString();
+    const bodyUserId = req.body?.userId?.toString?.() ?? req.body?.userId;
+    if (bodyUserId && bodyUserId !== userId) {
+      return res.status(403).json({
+        message: "Cannot save responses for another user."
+      });
+    }
 
-    await User.findByIdAndUpdate(
+    console.log("[Survey][POST] /responses payload summary:", {
       userId,
-      {
-        hasCompletedQuestions: isCompleted,
-        hasTimedOut: timedOut
-      },
-      {
-        runValidators: true
+      isCompleted,
+      timedOut,
+      answersCount: Array.isArray(req.body?.questionsAnswered)
+        ? req.body.questionsAnswered.length
+        : 0,
+      categoryCount: Array.isArray(req.body?.categoryResults?.categories)
+        ? req.body.categoryResults.categories.length
+        : 0
+    });
+
+    try {
+      const update = {
+        userId: user._id,
+        categoryResults: req.body?.categoryResults,
+        questionsAnswered: req.body?.questionsAnswered,
+        isCompleted,
+        timedOut,
+        submittedAt: new Date()
+      };
+
+      const rawRemainingSeconds = req.body?.remainingSeconds;
+      if (
+        rawRemainingSeconds !== undefined &&
+        rawRemainingSeconds !== null &&
+        Number.isFinite(Number(rawRemainingSeconds))
+      ) {
+        update.remainingSeconds = Math.max(0, Math.floor(Number(rawRemainingSeconds)));
       }
-    );
 
-    console.log("[Survey][POST] /responses saved to DB:", {
-      id: savedResponse._id?.toString?.() ?? null,
-      createdAt: savedResponse.createdAt ?? null,
-      userId: savedResponse.userId?.toString?.() ?? null,
-      isCompleted: savedResponse.isCompleted,
-      timedOut: savedResponse.timedOut
-    });
+      const savedResponse = await SurveyResponse.findOneAndUpdate(
+        { userId: user._id },
+        update,
+        {
+          upsert: true,
+          new: true,
+          setDefaultsOnInsert: true,
+          runValidators: true
+        }
+      );
 
-    return res.status(201).json({
-      message: "Survey response saved.",
-      data: savedResponse
-    });
-  } catch (error) {
-    console.error("[Survey][POST] /responses failed:", {
-      error: error.message,
-      details: error?.errors
-        ? Object.fromEntries(
-            Object.entries(error.errors).map(([key, value]) => [
-              key,
-              value?.message ?? "Invalid value"
-            ])
-          )
-        : undefined
-    });
+      await User.findByIdAndUpdate(
+        user._id,
+        {
+          hasCompletedQuestions: isCompleted,
+          hasTimedOut: timedOut
+        },
+        {
+          runValidators: true
+        }
+      );
 
-    return res.status(400).json({
-      message: "Failed to save survey response.",
-      error: error.message,
-      details: error?.errors
-        ? Object.fromEntries(
-            Object.entries(error.errors).map(([key, value]) => [
-              key,
-              value?.message ?? "Invalid value"
-            ])
-          )
-        : undefined
-    });
+      console.log("[Survey][POST] /responses saved to DB:", {
+        id: savedResponse._id?.toString?.() ?? null,
+        createdAt: savedResponse.createdAt ?? null,
+        userId: savedResponse.userId?.toString?.() ?? null,
+        isCompleted: savedResponse.isCompleted,
+        timedOut: savedResponse.timedOut
+      });
+
+      return res.status(201).json({
+        message: "Survey response saved.",
+        data: savedResponse
+      });
+    } catch (error) {
+      console.error("[Survey][POST] /responses failed:", {
+        error: error.message,
+        details: error?.errors
+          ? Object.fromEntries(
+              Object.entries(error.errors).map(([key, value]) => [
+                key,
+                value?.message ?? "Invalid value"
+              ])
+            )
+          : undefined
+      });
+
+      return res.status(400).json({
+        message: "Failed to save survey response.",
+        error: error.message,
+        details: error?.errors
+          ? Object.fromEntries(
+              Object.entries(error.errors).map(([key, value]) => [
+                key,
+                value?.message ?? "Invalid value"
+              ])
+            )
+          : undefined
+      });
+    }
   }
-});
+);
 
-router.get("/responses", async (_req, res) => {
+router.get("/responses", requireAdmin, async (_req, res) => {
   try {
     const responses = await SurveyResponse.find().sort({ createdAt: -1 }).populate("userId");
     console.log("[Survey][GET] /responses fetched from DB:", {
@@ -223,23 +272,18 @@ router.get("/responses", async (_req, res) => {
   }
 });
 
-router.get("/responses/status", async (req, res) => {
-  const email = typeof req.query.email === "string" ? req.query.email.trim() : "";
-
-  if (!email) {
-    return res.status(400).json({
-      message: "Query parameter 'email' is required."
-    });
-  }
+router.get("/responses/status", resolveSurveyUser, async (req, res) => {
+  const email = req.surveyUserEmail;
 
   try {
     const existingUser = await User.findOne({
-      email: email.toLowerCase()
+      email
     }).select("_id email hasCompletedQuestions hasTimedOut");
 
     if (!existingUser) {
       return res.status(200).json({
         hasCompleted: false,
+        hasTimedOut: false,
         user: null,
         latestSubmission: null
       });
@@ -254,7 +298,7 @@ router.get("/responses/status", async (req, res) => {
     const hasCompleted = Boolean(existingUser.hasCompletedQuestions);
     const hasTimedOut = Boolean(existingUser.hasTimedOut);
     console.log("[Survey][GET] /responses/status checked:", {
-      email: email.toLowerCase(),
+      email,
       hasCompleted,
       hasTimedOut
     });
@@ -280,7 +324,7 @@ router.get("/responses/status", async (req, res) => {
     });
   } catch (error) {
     console.error("[Survey][GET] /responses/status failed:", {
-      email: email.toLowerCase(),
+      email,
       error: error.message
     });
     return res.status(500).json({

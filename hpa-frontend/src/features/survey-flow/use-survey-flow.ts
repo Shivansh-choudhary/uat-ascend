@@ -185,14 +185,14 @@ export function useSurveyFlowState() {
   }
 
   const tryRestoreSessionAfterMicrosoftLogin = async (
-    account: NonNullable<Awaited<ReturnType<typeof handleMicrosoftRedirect>>>,
+    redirect: NonNullable<Awaited<ReturnType<typeof handleMicrosoftRedirect>>>,
   ) => {
-    const { name, email } = applyMicrosoftAccountToProfile(account)
+    const { name, email } = applyMicrosoftAccountToProfile(redirect.account)
     setIsRestoringSession(true)
     setAuthError(null)
 
     try {
-      const body = await postSurveySession({ email, name })
+      const body = await postSurveySession({ email, name }, redirect.idToken)
       const backendUser = body?.data?.user
       if (!backendUser) {
         setProfileForm((current) => ({
@@ -376,9 +376,9 @@ export function useSurveyFlowState() {
 
     void (async () => {
       try {
-        const account = await handleMicrosoftRedirect()
-        if (account) {
-          await tryRestoreSessionAfterMicrosoftLogin(account)
+        const redirect = await handleMicrosoftRedirect()
+        if (redirect) {
+          await tryRestoreSessionAfterMicrosoftLogin(redirect)
         }
       } catch (error) {
         const errorMessage = formatMsalError(error)

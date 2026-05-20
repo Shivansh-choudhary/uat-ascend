@@ -1,6 +1,18 @@
+import { getMicrosoftAuthToken } from '#/lib/msal-auth'
 import { API_SURVEY_RESPONSES_URL, API_SURVEY_SESSION_URL } from '#/lib/api'
 import type { ResultData } from '#/lib/survey-types'
 import type { UserData } from '#/store/assessment-store'
+
+async function buildAuthHeaders(preferredIdToken?: string | null): Promise<HeadersInit> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  }
+  const token = await getMicrosoftAuthToken(preferredIdToken)
+  if (token) {
+    headers.Authorization = `Bearer ${token}`
+  }
+  return headers
+}
 
 export async function saveSurveyResults(resultData: ResultData) {
   console.log('[Survey][Frontend] Sending POST request:', {
@@ -11,9 +23,7 @@ export async function saveSurveyResults(resultData: ResultData) {
   try {
     const response = await fetch(API_SURVEY_RESPONSES_URL, {
       method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
+      headers: await buildAuthHeaders(),
       body: JSON.stringify(resultData),
     })
 
@@ -41,12 +51,13 @@ export async function saveSurveyResults(resultData: ResultData) {
   }
 }
 
-export async function postSurveySession(userData: UserData | { email: string; name: string }) {
+export async function postSurveySession(
+  userData: UserData | { email: string; name: string },
+  preferredIdToken?: string | null,
+) {
   const response = await fetch(API_SURVEY_SESSION_URL, {
     method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-    },
+    headers: await buildAuthHeaders(preferredIdToken),
     body: JSON.stringify({ userData }),
   })
   const body = await response.json().catch(() => null)
