@@ -8,15 +8,15 @@ const closedCopy: Record<
   { title: string; description: string; buttonLabel: string }
 > = {
   completed: {
-    title: 'You already finished the assessment.',
+    title: 'Assessment already submitted.',
     description:
-      'You completed all questions before time ran out. This account cannot take the survey again.',
+      'You have already completed the assessment. Your responses are on record.',
     buttonLabel: 'Log out',
   },
   timed_out: {
-    title: 'Your assessment time has ended.',
+    title: 'Assessment time has ended.',
     description:
-      'The timer ran out before you finished all questions. Your partial responses were saved, but you cannot continue this attempt.',
+      'The time limit was reached before all questions were answered. Your partial responses are on record.',
     buttonLabel: 'Log out',
   },
   session_end: {
@@ -38,12 +38,14 @@ export function SurveyClosedScreen({ variant }: { variant: ClosedVariant }) {
         <h2 className="text-2xl font-semibold">
           {submitPhase === 'timed_out'
             ? 'Time is up. Thank you for participating.'
-            : 'Thank you for participating in the survey.'}
+            : `Thank you for taking the time to complete the HiPo assessment.`}
         </h2>
         <p className="mt-3 text-sm text-muted-foreground">
           {submitPhase === 'timed_out'
             ? 'Your progress has been saved to the best of what you completed before the timer ended.'
-            : 'Your responses have been saved successfully.'}
+            : `We truly appreciate your effort and participation.
+Our People Development team will review the outcomes and will get in touch with you regarding the next steps.
+Once again, thank you for your time and commitment.`}
         </p>
         <Button className="mt-6" variant="default" onClick={() => void handleSignOut()}>
           Sign out

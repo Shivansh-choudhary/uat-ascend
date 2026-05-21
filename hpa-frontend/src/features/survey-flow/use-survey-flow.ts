@@ -424,6 +424,7 @@ export function useSurveyFlowState() {
     }
   }, [isTimerActive, timerRunId])
 
+  // Auto-submit only when the timer runs out (not when questions are completed)
   useEffect(() => {
     if (
       isCheckingCompletion ||
@@ -433,7 +434,7 @@ export function useSurveyFlowState() {
     ) {
       return
     }
-    if (!isCompleted && !isTimeUp) {
+    if (!isTimeUp) {
       return
     }
     if (autoSubmitStartedRef.current) {
@@ -443,33 +444,22 @@ export function useSurveyFlowState() {
     setSubmitPhase('submitting')
 
     const run = async () => {
-      const submitStatus = {
-        isCompleted,
-        timedOut: isTimeUp && !isCompleted,
-      }
+      const submitStatus = { isCompleted, timedOut: true }
       const resultData = buildResultPayload(submitStatus)
       if (!resultData) {
         setSubmitPhase('error')
         autoSubmitStartedRef.current = false
         return
       }
-      console.log('[Survey][Frontend] Auto-submit prepared payload:', {
+      console.log('[Survey][Frontend] Timer expired — auto-saving:', {
         apiBaseUrl: API_BASE_URL,
         userId: resultData.userId,
         answersCount: resultData.questionsAnswered.length,
-        letterGrade: resultData.categoryResults.letterGrade,
-        ...submitStatus,
       })
       const ok = await saveSurveyResults(resultData)
       if (ok) {
         setIsTimerActive(false)
-        if (submitStatus.isCompleted) {
-          setHasCompletedAssessment(true)
-        }
-        if (submitStatus.timedOut) {
-          setHasTimedOutAssessment(true)
-        }
-        setSubmitPhase(getCompletionSubmitPhase(isCompleted))
+        setSubmitPhase('timed_out')
       } else {
         setSubmitPhase('error')
         autoSubmitStartedRef.current = false
@@ -481,22 +471,58 @@ export function useSurveyFlowState() {
     isCheckingCompletion,
     hasCompletedAssessment,
     hasTimedOutAssessment,
-    isCompleted,
     isTimeUp,
     showInstructions,
   ])
 
-  const canGoNext = useMemo(() => {
-    if (isTimeUp) {
-      return false
+  const handleSubmit = async () => {
+    if (autoSubmitStartedRef.current) {
+      return
     }
-    if (currentQuestionId >= questions.length) {
+    autoSubmitStartedRef.current = true
+    setSubmitPhase('submitting')
+    setIsTimerActive(false)
+
+    const resultData = buildResultPayload({ isCompleted: true, timedOut: false }, remainingSeconds)
+    if (!resultData) {
+      setSubmitPhase('error')
+      autoSubmitStartedRef.current = false
+      return
+    }
+    console.log('[Survey][Frontend] Manual submit:', {
+      apiBaseUrl: API_BASE_URL,
+      userId: resultData.userId,
+      answersCount: resultData.questionsAnswered.length,
+      letterGrade: resultData.categoryResults.letterGrade,
+    })
+    const ok = await saveSurveyResults(resultData)
+    if (ok) {
+      setSubmitPhase('completed')
+    } else {
+      setSubmitPhase('error')
+      autoSubmitStartedRef.current = false
+      setIsTimerActive(true)
+      setTimerRunId((v) => v + 1)
+    }
+  }
+
+  const isLastPage = currentQuestionId + 5 > questions.length
+
+  const canGoNext = useMemo(() => {
+    if (isTimeUp || isLastPage) {
       return false
     }
     return visibleQuestions.every(
       (question) => answersArray[question.id - 1] !== undefined,
     )
-  }, [answersArray, currentQuestionId, isTimeUp, visibleQuestions])
+  }, [answersArray, isLastPage, isTimeUp, visibleQuestions])
+
+  const canSubmit = useMemo(() => {
+    if (isTimeUp) {
+      return false
+    }
+    return isCompleted
+  }, [isCompleted, isTimeUp])
 
   return {
     isLoggedIn,
@@ -522,7 +548,9 @@ export function useSurveyFlowState() {
     countdownLabel,
     isFinalMessageVisible,
     submitPhase,
+    isLastPage,
     canGoNext,
+    canSubmit,
     setAnswerForQuestion,
     nextQuestion,
     updateProfileField,
@@ -534,6 +562,7 @@ export function useSurveyFlowState() {
     handleSignOut,
     handleSaveAndSignOut,
     handleRetrySave,
+    handleSubmit,
   }
 }
 

@@ -16,11 +16,14 @@ export function SurveyRunner() {
     answersArray,
     isTimeUp,
     submitPhase,
+    isLastPage,
     canGoNext,
+    canSubmit,
     setAnswerForQuestion,
     nextQuestion,
     handleSaveAndSignOut,
     handleRetrySave,
+    handleSubmit,
     isCompleted,
   } = useSurveyFlow()
 
@@ -144,9 +147,19 @@ export function SurveyRunner() {
             >
               Save and Sign Out
             </Button>
-            <Button className="w-full sm:w-auto" onClick={nextQuestion} disabled={!canGoNext}>
-              Next
-            </Button>
+            {isLastPage ? (
+              <Button
+                className="w-full sm:w-auto"
+                onClick={() => void handleSubmit()}
+                disabled={!canSubmit}
+              >
+                Submit
+              </Button>
+            ) : (
+              <Button className="w-full sm:w-auto" onClick={nextQuestion} disabled={!canGoNext}>
+                Next
+              </Button>
+            )}
           </div>
         </div>
       </section>

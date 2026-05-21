@@ -7,13 +7,13 @@ import type { UserData } from '#/store/assessment-store'
 import { AuthHeroPanel } from '#/components/AuthHeroPanel'
 
 const ENTITY_OPTIONS = [
-  'Beauty',
+  'Realty',
   'Construction',
-  'PMC',
+  'PNCA',
   'Sobha Community Management',
   'LFM',
   'Sobha Concrete',
-  'Lanfam Landscaping',
+  'Latinem Landscaping',
   'Advanced Manufacturing',
   'Sobha Modular & Facade',
   'Sobha Energy Solutions',
