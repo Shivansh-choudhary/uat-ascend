@@ -32,9 +32,6 @@ export function SurveyClosedScreen({ variant }: { variant: ClosedVariant }) {
   if (variant === 'session_end') {
     return (
       <section className="animate-in fade-in zoom-in-95 duration-500 rounded-xl border border-default bg-card/78 p-8 shadow-xs backdrop-blur-sm">
-        <p className="mb-1 text-xs font-semibold uppercase tracking-[0.16em] text-muted-foreground">
-          {submitPhase === 'timed_out' ? 'Time is up' : 'Thank you'}
-        </p>
         <h2 className="text-2xl font-semibold">
           {submitPhase === 'timed_out'
             ? 'Time is up. Thank you for participating.'
