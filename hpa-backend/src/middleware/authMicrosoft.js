@@ -184,24 +184,28 @@ async function requireMicrosoftAuth(req, res, next) {
     return next();
   }
 
+  const token = readBearerToken(req);
+
+  if (token) {
+    try {
+      req.auth = await verifyPasswordLoginToken(token);
+      return next();
+    } catch (passwordError) {
+      // Not a password-login token — try Microsoft JWT below.
+    }
+  }
+
   if (!azureAuth.isConfigured) {
     return res.status(503).json({
-      message: "Authentication is not configured on the server."
+      message:
+        "Microsoft SSO is not configured. Use email/password sign-in or set AZURE_TENANT_ID and AZURE_CLIENT_ID."
     });
   }
 
-  const token = readBearerToken(req);
   if (!token) {
     return res.status(401).json({
       message: "Authorization Bearer token is required."
     });
-  }
-
-  try {
-    req.auth = await verifyPasswordLoginToken(token);
-    return next();
-  } catch (passwordError) {
-    // Fall through to Microsoft JWT verification.
   }
 
   try {

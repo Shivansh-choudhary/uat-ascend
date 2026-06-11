@@ -43,10 +43,14 @@ export const API_SURVEY_LOGIN_URL = resolveUrl(SURVEY_API_PATHS.login)
 export const API_SURVEY_SESSION_URL = resolveUrl(SURVEY_API_PATHS.userSession)
 
 /** POST — save or update survey answers */
-export const API_SURVEY_RESPONSES_URL = resolveUrl(SURVEY_API_PATHS.saveResponse)
+export const API_SURVEY_RESPONSES_URL = resolveUrl(
+  SURVEY_API_PATHS.saveResponse,
+)
 
 /** GET — list all responses (admin) */
-export const API_SURVEY_RESPONSES_LIST_URL = resolveUrl(SURVEY_API_PATHS.listResponses)
+export const API_SURVEY_RESPONSES_LIST_URL = resolveUrl(
+  SURVEY_API_PATHS.listResponses,
+)
 
 /** GET — current user access (admin flag) */
 export const API_SURVEY_ME_URL = resolveUrl(SURVEY_API_PATHS.me)
@@ -57,7 +61,9 @@ export const API_SURVEY_ADMIN_PARTICIPANTS_URL = resolveUrl(
 )
 
 /** GET — admin Excel export */
-export const API_SURVEY_EXPORT_URL = resolveUrl(SURVEY_API_PATHS.exportResponses)
+export const API_SURVEY_EXPORT_URL = resolveUrl(
+  SURVEY_API_PATHS.exportResponses,
+)
 
 /** GET — check completion by email (?email=) */
 export function apiSurveyResponsesStatusUrl(email: string): string {
@@ -67,7 +73,6 @@ export function apiSurveyResponsesStatusUrl(email: string): string {
 
 /** GET — backend health */
 export const API_HEALTH_URL = resolveUrl('/health')
-
 export function getApiBaseUrl(): string {
   return import.meta.env.DEV ? devApiOrigin() : PRODUCTION_ORIGIN
 }

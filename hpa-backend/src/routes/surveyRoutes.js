@@ -74,7 +74,7 @@ function hasCompleteProfilePayload(payload) {
 }
 
 function rejectMismatchedEmail(req, res, payloadEmail) {
-  if (azureAuth.authDisabled || !payloadEmail) {
+  if (azureAuth.authDisabled || !payloadEmail || req.auth?.passwordLogin) {
     return false;
   }
   if (payloadEmail !== req.auth.email) {
