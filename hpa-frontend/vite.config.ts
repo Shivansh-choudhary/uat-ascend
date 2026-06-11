@@ -7,8 +7,8 @@ import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-const PRODUCTION_API_ORIGIN = import.meta.env.VITE_API_BASE_URL
 const LOCAL_BACKEND_ORIGIN = 'http://localhost:5011'
+const FALLBACK_PRODUCTION_ORIGIN = 'https://uat-sobhaascend.sobhaapps.com'
 const configDir = path.dirname(fileURLToPath(import.meta.url))
 
 function isLocalApiUrl(url: string) {
@@ -32,14 +32,11 @@ function loadProjectEnv(mode: string) {
 export default defineConfig(({ mode }) => {
   const env = loadProjectEnv(mode)
   const devApiEnv = env.VITE_API_BASE_URL?.trim() ?? ''
-  const devUseProxy =
-    mode !== 'production' && (!devApiEnv || isLocalApiUrl(devApiEnv))
-  const apiBaseUrl =
-    mode === 'production'
-      ? PRODUCTION_API_ORIGIN
-      : devUseProxy
-        ? ''
-        : devApiEnv.replace(/\/$/, '')
+  const useLocalApi = !devApiEnv || isLocalApiUrl(devApiEnv)
+  const useProxy = useLocalApi
+  const apiBaseUrl = useLocalApi ? '' : devApiEnv.replace(/\/$/, '')
+  const productionApiOrigin =
+    env.VITE_API_BASE_URL?.trim() || FALLBACK_PRODUCTION_ORIGIN
   const devProxy = {
     '/api': { target: LOCAL_BACKEND_ORIGIN, changeOrigin: true },
     '/health': { target: LOCAL_BACKEND_ORIGIN, changeOrigin: true },
@@ -50,7 +47,10 @@ export default defineConfig(({ mode }) => {
   const msalTenantId = env.VITE_MSAL_TENANT_ID?.trim() ?? ''
   const msalRedirectUri =
     env.VITE_MSAL_REDIRECT_URI?.trim() ||
-    (mode === 'production' ? PRODUCTION_API_ORIGIN : '')
+    (mode === 'production' ? productionApiOrigin : '')
+
+  const injectedApiBaseUrl =
+    mode === 'production' ? apiBaseUrl || productionApiOrigin : apiBaseUrl
 
   if (mode === 'production' && (!msalClientId || !msalTenantId)) {
     console.warn(
@@ -66,18 +66,18 @@ export default defineConfig(({ mode }) => {
       host: '0.0.0.0',
       port: 3011,
       strictPort: true,
-      proxy: devUseProxy ? devProxy : undefined,
+      proxy: useProxy ? devProxy : undefined,
     },
     preview: {
       host: '0.0.0.0',
       port: 3011,
       strictPort: true,
-      proxy: devUseProxy ? devProxy : undefined,
+      proxy: useProxy ? devProxy : undefined,
     },
     resolve: { tsconfigPaths: true },
     plugins: [tailwindcss(), tanstackStart(), viteReact()],
     define: {
-      'import.meta.env.VITE_API_BASE_URL': JSON.stringify(apiBaseUrl),
+      'import.meta.env.VITE_API_BASE_URL': JSON.stringify(injectedApiBaseUrl),
       // TanStack server bundles do not load .env at runtime — inject at build time
       'import.meta.env.VITE_MSAL_CLIENT_ID': JSON.stringify(msalClientId),
       'import.meta.env.VITE_MSAL_TENANT_ID': JSON.stringify(msalTenantId),
