@@ -173,6 +173,7 @@ function readBearerToken(req) {
 
 async function requireMicrosoftAuth(req, res, next) {
   if (azureAuth.authDisabled) {
+    console.log("[Auth] Auth disabled - bypassing verification");
     req.auth = {
       oid: "",
       email: "",
@@ -185,17 +186,23 @@ async function requireMicrosoftAuth(req, res, next) {
   }
 
   const token = readBearerToken(req);
+  console.log("[Auth] Verifying token", { hasToken: !!token, isConfigured: azureAuth.isConfigured });
 
   if (token) {
     try {
+      console.log("[Auth] Attempting password-login token verification");
       req.auth = await verifyPasswordLoginToken(token);
+      console.log("[Auth] Password-login token verified", { email: req.auth.email });
       return next();
     } catch (passwordError) {
-      // Not a password-login token — try Microsoft JWT below.
+      console.log("[Auth] Not a password-login token, trying Microsoft SSO", {
+        passwordError: passwordError.message
+      });
     }
   }
 
   if (!azureAuth.isConfigured) {
+    console.warn("[Auth] Microsoft SSO not configured - password login required");
     return res.status(503).json({
       message:
         "Microsoft SSO is not configured. Use email/password sign-in or set AZURE_TENANT_ID and AZURE_CLIENT_ID."
@@ -203,13 +210,16 @@ async function requireMicrosoftAuth(req, res, next) {
   }
 
   if (!token) {
+    console.warn("[Auth] No token provided");
     return res.status(401).json({
       message: "Authorization Bearer token is required."
     });
   }
 
   try {
+    console.log("[Auth] Verifying Microsoft SSO token");
     req.auth = await verifyBearerToken(token);
+    console.log("[Auth] Microsoft SSO token verified", { email: req.auth.email });
     return next();
   } catch (error) {
     console.error("[Auth] Token verification failed:", {

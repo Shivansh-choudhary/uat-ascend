@@ -20,7 +20,10 @@ router.post("/auth/login", async (req, res) => {
     typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
   const password = typeof req.body?.password === "string" ? req.body.password : "";
 
+  console.log("[Auth] Password login attempt:", { email });
+
   if (!email || !password) {
+    console.warn("[Auth] Password login rejected: missing email or password");
     return res.status(400).json({
       message: "Email and password are required."
     });
@@ -28,17 +31,27 @@ router.post("/auth/login", async (req, res) => {
 
   try {
     const user = await User.findOne({ email });
-    if (!user || user.password !== password) {
+    if (!user) {
+      console.warn("[Auth] Password login rejected: user not found", { email });
       return res.status(401).json({
         message: "Invalid email or password."
       });
     }
 
+    if (user.password !== password) {
+      console.warn("[Auth] Password login rejected: password mismatch", { email });
+      return res.status(401).json({
+        message: "Invalid email or password."
+      });
+    }
+
+    console.log("[Auth] Password verified, generating token", { email, name: user.name });
     const token = await signPasswordLoginToken({
       email: user.email,
       name: user.name
     });
 
+    console.log("[Auth] Password login successful", { email, role: user.role });
     return res.status(200).json({
       message: "Login successful.",
       data: {
@@ -49,7 +62,8 @@ router.post("/auth/login", async (req, res) => {
   } catch (error) {
     console.error("[Auth] Password login failed:", {
       email,
-      message: error.message
+      message: error.message,
+      stack: error.stack
     });
     return res.status(500).json({
       message: "Failed to sign in.",
@@ -92,6 +106,13 @@ router.post("/users/session", resolveSurveyUser, async (req, res) => {
     typeof payload?.email === "string" ? payload.email.trim().toLowerCase() : "";
   const email = req.surveyUserEmail;
 
+  console.log("[Survey][POST] /users/session", {
+    payloadEmail,
+    email,
+    authEmail: req.auth?.email,
+    hasCompleteProfile: hasCompleteProfilePayload(payload)
+  });
+
   if (rejectMismatchedEmail(req, res, payloadEmail)) {
     return;
   }
@@ -104,9 +125,11 @@ router.post("/users/session", resolveSurveyUser, async (req, res) => {
 
   try {
     if (!hasCompleteProfilePayload(payload)) {
+      console.log("[Survey][POST] Incomplete profile - checking for existing user");
       const existingUser = await User.findOne({ email });
 
       if (!existingUser) {
+        console.log("[Survey][POST] No existing user found");
         return res.status(200).json({
           message: "User session not found.",
           data: {
@@ -129,6 +152,11 @@ router.post("/users/session", resolveSurveyUser, async (req, res) => {
         updatedAt: -1
       });
 
+      console.log("[Survey][POST] Restoring existing user session", {
+        email,
+        hasResponse: !!existingResponse
+      });
+
       return res.status(200).json({
         message: "User session restored.",
         data: {
@@ -138,6 +166,7 @@ router.post("/users/session", resolveSurveyUser, async (req, res) => {
       });
     }
 
+    console.log("[Survey][POST] Complete profile submission - upserting user");
     const bootstrapRole = resolveBootstrapRole(email, {
       superAdminEmails: azureAuth.superAdminEmails,
       adminEmails: azureAuth.adminEmails
@@ -169,6 +198,12 @@ router.post("/users/session", resolveSurveyUser, async (req, res) => {
       updatedAt: -1
     });
 
+    console.log("[Survey][POST] User session prepared", {
+      email,
+      role: user.role,
+      hasResponse: !!existingResponse
+    });
+
     return res.status(200).json({
       message: "User session prepared.",
       data: {
@@ -178,7 +213,9 @@ router.post("/users/session", resolveSurveyUser, async (req, res) => {
     });
   } catch (error) {
     console.error("[Survey][POST] /users/session failed:", {
-      error: error.message
+      email,
+      error: error.message,
+      stack: error.stack
     });
     return res.status(400).json({
       message: "Failed to prepare user session.",
