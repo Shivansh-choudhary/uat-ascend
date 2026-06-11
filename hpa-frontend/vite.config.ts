@@ -7,7 +7,7 @@ import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-const PRODUCTION_API_ORIGIN = 'https://uat-sobhaascend.sobhaapps.com'
+const PRODUCTION_API_ORIGIN = import.meta.env.VITE_API_BASE_URL
 const LOCAL_BACKEND_ORIGIN = 'http://localhost:5011'
 const configDir = path.dirname(fileURLToPath(import.meta.url))
 
