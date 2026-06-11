@@ -1,4 +1,6 @@
+import { isPasswordLoginEnabled } from '#/lib/app-config'
 import { getMicrosoftAuthToken } from '#/lib/msal-auth'
+import { getPasswordAuthToken } from '#/lib/password-auth'
 import { API_SURVEY_RESPONSES_URL, API_SURVEY_SESSION_URL } from '#/lib/api'
 import type { ResultData } from '#/lib/survey-types'
 import type { UserData } from '#/store/assessment-store'
@@ -7,6 +9,15 @@ async function buildAuthHeaders(preferredIdToken?: string | null): Promise<Heade
   const headers: Record<string, string> = {
     'Content-Type': 'application/json',
   }
+
+  if (isPasswordLoginEnabled()) {
+    const passwordToken = await getPasswordAuthToken()
+    if (passwordToken) {
+      headers.Authorization = `Bearer ${passwordToken}`
+      return headers
+    }
+  }
+
   const token = await getMicrosoftAuthToken(preferredIdToken)
   if (token) {
     headers.Authorization = `Bearer ${token}`

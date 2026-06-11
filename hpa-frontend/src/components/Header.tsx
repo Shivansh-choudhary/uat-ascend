@@ -1,6 +1,8 @@
 import { Link, useRouterState } from '@tanstack/react-router'
 import { Button } from '#/components/ui/button'
+import { isPasswordLoginEnabled } from '#/lib/app-config'
 import { logoutMicrosoft } from '#/lib/msal-auth'
+import { clearPasswordAuthToken } from '#/lib/password-auth'
 import { useAssessmentStore } from '#/store/assessment-store'
 
 export default function Header() {
@@ -11,7 +13,11 @@ export default function Header() {
 
   const handleSignOut = async () => {
     try {
-      await logoutMicrosoft()
+      if (isPasswordLoginEnabled()) {
+        clearPasswordAuthToken()
+      } else {
+        await logoutMicrosoft()
+      }
     } catch (error) {
       console.error('[Auth] Microsoft logout failed:', error)
     } finally {

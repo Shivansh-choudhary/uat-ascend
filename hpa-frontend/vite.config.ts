@@ -45,6 +45,7 @@ export default defineConfig(({ mode }) => {
     '/health': { target: LOCAL_BACKEND_ORIGIN, changeOrigin: true },
   }
 
+  const useLogin = env.VITE_USE_LOGIN?.trim() === '1' ? '1' : '0'
   const msalClientId = env.VITE_MSAL_CLIENT_ID?.trim() ?? ''
   const msalTenantId = env.VITE_MSAL_TENANT_ID?.trim() ?? ''
   const msalRedirectUri =
@@ -81,6 +82,7 @@ export default defineConfig(({ mode }) => {
       'import.meta.env.VITE_MSAL_CLIENT_ID': JSON.stringify(msalClientId),
       'import.meta.env.VITE_MSAL_TENANT_ID': JSON.stringify(msalTenantId),
       'import.meta.env.VITE_MSAL_REDIRECT_URI': JSON.stringify(msalRedirectUri),
+      'import.meta.env.VITE_USE_LOGIN': JSON.stringify(useLogin),
     },
   }
 })

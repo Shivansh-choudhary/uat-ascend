@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SubmitEvent } from 'react'
 import { questions } from '#/lib/assessment'
+import { isPasswordLoginEnabled } from '#/lib/app-config'
 import { getApiBaseUrl } from '#/lib/api'
 import {
   applyMicrosoftAccountToProfile,
@@ -10,6 +11,11 @@ import {
   loginWithMicrosoft,
   logoutMicrosoft,
 } from '#/lib/msal-auth'
+import {
+  clearPasswordAuthToken,
+  getStoredPasswordAuthToken,
+  loginWithPassword,
+} from '#/lib/password-auth'
 import { postSurveySession, saveSurveyResults } from '#/lib/survey-api'
 import {
   resolveRemainingSecondsFromBackend,
@@ -63,6 +69,8 @@ export function useSurveyFlowState() {
   const [isAuthRedirecting, setIsAuthRedirecting] = useState(false)
   const [isHandlingMsalRedirect, setIsHandlingMsalRedirect] = useState(true)
   const [isRestoringSession, setIsRestoringSession] = useState(false)
+  const [isPasswordLoggingIn, setIsPasswordLoggingIn] = useState(false)
+  const passwordLoginEnabled = isPasswordLoginEnabled()
   const [isCheckingCompletion, setIsCheckingCompletion] = useState(false)
   const [hasCompletedAssessment, setHasCompletedAssessment] = useState(false)
   const [hasTimedOutAssessment, setHasTimedOutAssessment] = useState(false)
@@ -230,7 +238,74 @@ export function useSurveyFlowState() {
     }
   }
 
+  const tryRestoreSessionAfterPasswordLogin = async (email: string, name: string) => {
+    setIsRestoringSession(true)
+    setAuthError(null)
+
+    try {
+      const body = await postSurveySession({ email, name })
+      const backendUser = body?.data?.user
+      if (!backendUser) {
+        setProfileForm((current) => ({
+          ...current,
+          name,
+          email,
+        }))
+        setShowProfileForm(true)
+        return
+      }
+
+      const restoredUser = userDataFromBackend(backendUser)
+      if (!isUserProfileComplete(restoredUser)) {
+        setProfileForm(restoredUser)
+        setOtherEntity('')
+        setShowProfileForm(true)
+        return
+      }
+
+      applySessionFromBackend(restoredUser, backendUser, body?.data?.response)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('[Survey][Frontend] Failed to restore session after password login:', {
+        message: errorMessage,
+        raw: error,
+      })
+      setAuthError(`We could not restore your session. ${errorMessage}`)
+      setShowProfileForm(false)
+    } finally {
+      setIsRestoringSession(false)
+    }
+  }
+
+  const handlePasswordLogin = async (email: string, password: string) => {
+    resetProfileForm()
+    setAuthError(null)
+    setIsPasswordLoggingIn(true)
+
+    try {
+      const { user } = await loginWithPassword(email, password)
+      const loggedInEmail =
+        typeof user?.email === 'string' ? user.email.trim().toLowerCase() : email.trim().toLowerCase()
+      const loggedInName =
+        typeof user?.name === 'string' && user.name.trim() ? user.name.trim() : loggedInEmail
+      await tryRestoreSessionAfterPasswordLogin(loggedInEmail, loggedInName)
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+      console.error('[Auth] Password login failed:', {
+        message: errorMessage,
+        raw: error,
+      })
+      setAuthError(errorMessage)
+    } finally {
+      setIsPasswordLoggingIn(false)
+    }
+  }
+
   const handleLogin = async () => {
+    if (passwordLoginEnabled) {
+      return
+    }
+
     resetProfileForm()
     setAuthError(null)
 
@@ -300,7 +375,11 @@ export function useSurveyFlowState() {
 
   const handleSignOut = async () => {
     try {
-      await logoutMicrosoft()
+      if (passwordLoginEnabled) {
+        clearPasswordAuthToken()
+      } else {
+        await logoutMicrosoft()
+      }
     } catch (error) {
       console.error('[Auth] Microsoft logout failed:', error)
     } finally {
@@ -374,6 +453,46 @@ export function useSurveyFlowState() {
       return
     }
 
+    if (passwordLoginEnabled) {
+      const storedToken = getStoredPasswordAuthToken()
+      if (!storedToken) {
+        setIsHandlingMsalRedirect(false)
+        return
+      }
+
+      void (async () => {
+        try {
+          const body = await postSurveySession({
+            email: '',
+            name: '',
+          })
+          const backendUser = body?.data?.user
+          if (!backendUser) {
+            clearPasswordAuthToken()
+            return
+          }
+
+          const restoredUser = userDataFromBackend(backendUser)
+          if (!isUserProfileComplete(restoredUser)) {
+            setProfileForm(restoredUser)
+            setOtherEntity('')
+            setShowProfileForm(true)
+            return
+          }
+
+          applySessionFromBackend(restoredUser, backendUser, body?.data?.response)
+        } catch (error) {
+          clearPasswordAuthToken()
+          const errorMessage = error instanceof Error ? error.message : 'Unknown error'
+          console.error('[Auth] Failed to restore password login session:', error)
+          setAuthError(errorMessage)
+        } finally {
+          setIsHandlingMsalRedirect(false)
+        }
+      })()
+      return
+    }
+
     void (async () => {
       try {
         const redirect = await handleMicrosoftRedirect()
@@ -389,7 +508,7 @@ export function useSurveyFlowState() {
         setIsAuthRedirecting(false)
       }
     })()
-  }, [isLoggedIn])
+  }, [isLoggedIn, passwordLoginEnabled])
 
   useEffect(() => {
     console.log('[Auth/Survey State]', {
@@ -535,6 +654,8 @@ export function useSurveyFlowState() {
     isAuthRedirecting,
     isHandlingMsalRedirect,
     isRestoringSession,
+    isPasswordLoggingIn,
+    isPasswordLoginEnabled: passwordLoginEnabled,
     isCheckingCompletion,
     hasCompletedAssessment,
     hasTimedOutAssessment,
@@ -556,6 +677,7 @@ export function useSurveyFlowState() {
     updateProfileField,
     handleOtherEntityChange,
     handleLogin,
+    handlePasswordLogin,
     handleProfileSubmit,
     handleProfileBack,
     handleStartOrContinueSurvey,

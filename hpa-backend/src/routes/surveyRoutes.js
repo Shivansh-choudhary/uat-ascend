@@ -4,6 +4,7 @@ const User = require("../models/User");
 const { requireMicrosoftAuth, requireAdmin } = require("../middleware/authMicrosoft");
 const { resolveSurveyUser, loadSurveyUserDocument } = require("../middleware/resolveSurveyUser");
 const azureAuth = require("../config/azureAuth");
+const { signPasswordLoginToken } = require("../services/passwordLoginToken");
 const { resolveBootstrapRole } = require("../constants/userRoles");
 const { resolveAdminAccess } = require("../services/resolveAdminAccess");
 const {
@@ -13,6 +14,49 @@ const {
 } = require("../services/surveyExport");
 
 const router = express.Router();
+
+router.post("/auth/login", async (req, res) => {
+  const email =
+    typeof req.body?.email === "string" ? req.body.email.trim().toLowerCase() : "";
+  const password = typeof req.body?.password === "string" ? req.body.password : "";
+
+  if (!email || !password) {
+    return res.status(400).json({
+      message: "Email and password are required."
+    });
+  }
+
+  try {
+    const user = await User.findOne({ email });
+    if (!user || user.password !== password) {
+      return res.status(401).json({
+        message: "Invalid email or password."
+      });
+    }
+
+    const token = await signPasswordLoginToken({
+      email: user.email,
+      name: user.name
+    });
+
+    return res.status(200).json({
+      message: "Login successful.",
+      data: {
+        token,
+        user
+      }
+    });
+  } catch (error) {
+    console.error("[Auth] Password login failed:", {
+      email,
+      message: error.message
+    });
+    return res.status(500).json({
+      message: "Failed to sign in.",
+      error: error.message
+    });
+  }
+});
 
 router.use(requireMicrosoftAuth);
 

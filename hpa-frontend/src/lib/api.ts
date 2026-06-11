@@ -2,6 +2,7 @@ const PRODUCTION_ORIGIN = 'https://sobhaascend.sobhaapps.com'
 
 /** All backend survey routes (see hpa-backend/src/routes/surveyRoutes.js). */
 export const SURVEY_API_PATHS = {
+  login: '/api/surveys/auth/login',
   userSession: '/api/surveys/users/session',
   saveResponse: '/api/surveys/responses',
   listResponses: '/api/surveys/responses',
@@ -34,6 +35,9 @@ function resolveUrl(path: string): string {
   }
   return productionUrl(path)
 }
+
+/** POST — email/password login (when USE_LOGIN=1) */
+export const API_SURVEY_LOGIN_URL = resolveUrl(SURVEY_API_PATHS.login)
 
 /** POST — prepare / resume user session */
 export const API_SURVEY_SESSION_URL = resolveUrl(SURVEY_API_PATHS.userSession)

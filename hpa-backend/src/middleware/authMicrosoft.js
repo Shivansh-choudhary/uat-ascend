@@ -1,5 +1,6 @@
 const azureAuth = require("../config/azureAuth");
 const { resolveAdminAccess } = require("../services/resolveAdminAccess");
+const { verifyPasswordLoginToken } = require("../services/passwordLoginToken");
 
 /** jose v5+ is ESM-only — load via dynamic import from CommonJS. */
 let joseModulePromise;
@@ -194,6 +195,13 @@ async function requireMicrosoftAuth(req, res, next) {
     return res.status(401).json({
       message: "Authorization Bearer token is required."
     });
+  }
+
+  try {
+    req.auth = await verifyPasswordLoginToken(token);
+    return next();
+  } catch (passwordError) {
+    // Fall through to Microsoft JWT verification.
   }
 
   try {
