@@ -1,4 +1,4 @@
-const PRODUCTION_ORIGIN = 'https://sobhaascend.sobhaapps.com'
+const PRODUCTION_ORIGIN = import.meta.env.VITE_API_BASE_URL
 
 /** All backend survey routes (see hpa-backend/src/routes/surveyRoutes.js). */
 export const SURVEY_API_PATHS = {
