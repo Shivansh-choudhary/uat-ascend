@@ -7,8 +7,8 @@ import { tanstackStart } from '@tanstack/react-start/plugin/vite'
 import viteReact from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 
-const PRODUCTION_API_ORIGIN = 'https://sobhaascend.sobhaapps.com'
-const LOCAL_BACKEND_ORIGIN = 'http://localhost:5001'
+const PRODUCTION_API_ORIGIN = 'https://uat-sobhaascend.sobhaapps.com'
+const LOCAL_BACKEND_ORIGIN = 'http://localhost:5011'
 const configDir = path.dirname(fileURLToPath(import.meta.url))
 
 function isLocalApiUrl(url: string) {
@@ -64,13 +64,13 @@ export default defineConfig(({ mode }) => {
     envDir: configDir,
     server: {
       host: '0.0.0.0',
-      port: 3010,
+      port: 3011,
       strictPort: true,
       proxy: devUseProxy ? devProxy : undefined,
     },
     preview: {
       host: '0.0.0.0',
-      port: 3010,
+      port: 3011,
       strictPort: true,
       proxy: devUseProxy ? devProxy : undefined,
     },
