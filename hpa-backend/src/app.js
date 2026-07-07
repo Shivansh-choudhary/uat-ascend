@@ -28,7 +28,7 @@ app.use((req, _res, next) => {
   next();
 });
 
-app.get("/health", (_req, res) => {
+app.get("/", (_req, res) => {
   res.status(200).json({ status: "ok" });
 });
 
